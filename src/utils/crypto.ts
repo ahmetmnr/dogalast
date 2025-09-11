@@ -32,13 +32,7 @@ export interface EncryptionResult {
  * Cryptographic utilities class
  */
 export class CryptoUtils {
-  private static readonly SALT_ROUNDS = 12;
-  private static readonly KEY_LENGTH = 32;
   private static readonly IV_LENGTH = 16;
-  private static readonly TAG_LENGTH = 16;
-  private static readonly SCRYPT_N = 16384;
-  private static readonly SCRYPT_R = 8;
-  private static readonly SCRYPT_P = 1;
 
   /**
    * Generate a secure JWT token
@@ -105,7 +99,7 @@ export class CryptoUtils {
     };
 
     // Use a specific secret for ephemeral tokens
-    const ephemeralSecret = process.env.EPHEMERAL_TOKEN_SECRET || process.env.JWT_SECRET || '';
+    const ephemeralSecret = process.env['EPHEMERAL_TOKEN_SECRET'] || process.env['JWT_SECRET'] || '';
     
     return this.generateSecureJWT(payload, ephemeralSecret, expiresIn);
   }
@@ -209,8 +203,8 @@ export class CryptoUtils {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     
     // Set version (4) and variant bits
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+    bytes[8] = (bytes[8]! & 0x3f) | 0x80;
     
     // Convert to hex string
     const hex = Array.from(bytes)

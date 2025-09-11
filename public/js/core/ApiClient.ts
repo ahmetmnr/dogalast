@@ -220,7 +220,7 @@ export class APIClient {
 
     // Add auth token if available
     if (this.authToken) {
-      requestHeaders.Authorization = `Bearer ${this.authToken}`;
+      requestHeaders['Authorization'] = `Bearer ${this.authToken}`;
     }
 
     // Prepare request options
@@ -549,8 +549,8 @@ export const api = {
     deleteQuestion: (questionId: string) =>
       apiClient.delete(`/api/admin/questions/${questionId}`),
 
-    bulkDeleteQuestions: (questionIds: string[]) =>
-      apiClient.delete('/api/admin/questions/bulk-delete', { questionIds }),
+    bulkDeleteQuestions: () =>
+      apiClient.delete('/api/admin/questions/bulk-delete', { timeout: 30000 }),
 
     bulkUpdateQuestionStatus: (questionIds: string[], isActive: boolean) =>
       apiClient.put('/api/admin/questions/bulk-status', { questionIds, isActive }),

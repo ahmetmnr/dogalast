@@ -6,7 +6,6 @@
 import { eq, and, desc } from 'drizzle-orm';
 import { quizSessions, sessionQuestions, questionTimings } from '@/db/schema';
 import { Logger } from '@/utils/logger';
-import { Environment } from '@/utils/environment';
 import type { DatabaseInstance } from '@/db/connection';
 
 interface SessionState {
@@ -43,7 +42,6 @@ interface ConnectionMetrics {
 export class ConnectionRecoveryService {
   private db: DatabaseInstance;
   private static readonly MAX_RECOVERY_ATTEMPTS = 3;
-  private static readonly RECOVERY_TIMEOUT_MS = 30000; // 30 seconds
   private static readonly SESSION_TIMEOUT_MS = 1800000; // 30 minutes
 
   private connectionMetrics = new Map<string, ConnectionMetrics>();
@@ -106,7 +104,7 @@ export class ConnectionRecoveryService {
   ): Promise<RecoveryResult> {
     try {
       // Check if max attempts exceeded
-      if (attemptNumber > this.MAX_RECOVERY_ATTEMPTS) {
+      if (attemptNumber > ConnectionRecoveryService.MAX_RECOVERY_ATTEMPTS) {
         Logger.warn('Max recovery attempts exceeded', {
           sessionId,
           participantId,
@@ -152,7 +150,7 @@ export class ConnectionRecoveryService {
       const now = new Date();
       const timeSinceLastActivity = now.getTime() - sessionState.lastActivityAt.getTime();
       
-      if (timeSinceLastActivity > this.SESSION_TIMEOUT_MS) {
+      if (timeSinceLastActivity > ConnectionRecoveryService.SESSION_TIMEOUT_MS) {
         // Session timed out
         await this.abandonSession(sessionId);
         
@@ -190,13 +188,12 @@ export class ConnectionRecoveryService {
       });
 
       // Exponential backoff for next attempt
-      const backoffDelay = Math.min(1000 * Math.pow(2, attemptNumber - 1), 10000);
       
       return {
         success: false,
-        canResume: attemptNumber < this.MAX_RECOVERY_ATTEMPTS,
-        error: `Recovery attempt ${attemptNumber} failed: ${error.message}`,
-        suggestedAction: attemptNumber < this.MAX_RECOVERY_ATTEMPTS ? 'resume' : 'restart'
+        canResume: attemptNumber < ConnectionRecoveryService.MAX_RECOVERY_ATTEMPTS,
+        error: `Recovery attempt ${attemptNumber} failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        suggestedAction: attemptNumber < ConnectionRecoveryService.MAX_RECOVERY_ATTEMPTS ? 'resume' : 'restart'
       };
     }
   }
@@ -272,22 +269,24 @@ export class ConnectionRecoveryService {
       const sessionData = session[0];
 
       // Check session status
-      if (sessionData.status === 'completed') {
-        return {
-          isValid: false,
-          canRecover: false,
-          error: 'Session already completed',
-          issues: ['session_completed']
-        };
-      }
+      if (sessionData) {
+        if (sessionData.status === 'completed') {
+          return {
+            isValid: false,
+            canRecover: false,
+            error: 'Session already completed',
+            issues: ['session_completed']
+          };
+        }
 
-      if (sessionData.status === 'abandoned') {
-        return {
-          isValid: false,
-          canRecover: false,
-          error: 'Session was abandoned',
-          issues: ['session_abandoned']
-        };
+        if (sessionData.status === 'abandoned') {
+          return {
+            isValid: false,
+            canRecover: false,
+            error: 'Session was abandoned',
+            issues: ['session_abandoned']
+          };
+        }
       }
 
       // Check for timing inconsistencies
@@ -406,19 +405,23 @@ export class ConnectionRecoveryService {
         .where(eq(sessionQuestions.sessionId, sessionId))
         .orderBy(desc(questionTimings.serverTimestamp));
 
-      return {
-        sessionId: sessionData.id,
-        participantId: sessionData.participantId,
-        currentQuestionIndex: sessionData.currentQuestionIndex,
-        totalScore: sessionData.totalScore,
-        status: sessionData.status as SessionState['status'],
-        lastActivityAt: sessionData.lastActivityAt,
-        timingEvents: timingEvents.map(te => ({
-          eventType: te.question_timings.eventType,
-          timestamp: te.question_timings.serverTimestamp,
-          metadata: te.question_timings.metadata ? JSON.parse(te.question_timings.metadata) : undefined
-        }))
-      };
+      if (sessionData) {
+        return {
+          sessionId: sessionData.id,
+          participantId: sessionData.participantId,
+          currentQuestionIndex: sessionData.currentQuestionIndex,
+          totalScore: sessionData.totalScore,
+          status: sessionData.status as SessionState['status'],
+          lastActivityAt: sessionData.lastActivityAt,
+          timingEvents: timingEvents.map(te => ({
+            eventType: te.question_timings.eventType,
+            timestamp: te.question_timings.serverTimestamp,
+            metadata: te.question_timings.metadata ? JSON.parse(te.question_timings.metadata) : undefined
+          }))
+        };
+      }
+      
+      return null;
 
     } catch (error) {
       Logger.error('Failed to get session state', error as Error);
@@ -472,16 +475,18 @@ export class ConnectionRecoveryService {
         const prevEvent = events[i - 1];
         const currentEvent = events[i];
         
-        const timeDiff = currentEvent.question_timings.serverTimestamp - prevEvent.question_timings.serverTimestamp;
+        if (currentEvent && prevEvent) {
+          const timeDiff = currentEvent.question_timings.serverTimestamp - prevEvent.question_timings.serverTimestamp;
         
         // Check for negative time differences
         if (timeDiff < 0) {
           issues.push('negative_time_difference');
         }
         
-        // Check for suspiciously large gaps
-        if (timeDiff > 300000) { // 5 minutes
-          issues.push('large_time_gap');
+          // Check for suspiciously large gaps
+          if (timeDiff > 300000) { // 5 minutes
+            issues.push('large_time_gap');
+          }
         }
       }
 
@@ -499,11 +504,11 @@ export class ConnectionRecoveryService {
   private async checkQuestionIntegrity(sessionId: string): Promise<{ isValid: boolean; missingQuestions: number }> {
     try {
       const sessionQuestionCount = await this.db
-        .select({ count: sql<number>`count(*)`.as('count') })
+        .select()
         .from(sessionQuestions)
         .where(eq(sessionQuestions.sessionId, sessionId));
 
-      const count = sessionQuestionCount[0]?.count || 0;
+      const count = sessionQuestionCount.length;
       
       // Expect at least 1 question for active sessions
       return {
@@ -594,6 +599,72 @@ export class ConnectionRecoveryService {
     }
 
     return cleanedCount;
+  }
+
+  /**
+   * Analyze recovery options for a session
+   */
+  async analyzeRecoveryOptions(sessionId: string, participantId: number, _attemptNumber: number): Promise<{
+    canResume: boolean;
+    suggestedAction: string;
+    reason?: string;
+  }> {
+    try {
+      const sessionData = await this.getSessionData(sessionId, participantId);
+      
+      if (!sessionData) {
+        return {
+          canResume: false,
+          suggestedAction: 'start_new_session',
+          reason: 'Session not found'
+        };
+      }
+
+      if (sessionData.status === 'completed') {
+        return {
+          canResume: false,
+          suggestedAction: 'view_results',
+          reason: 'Session already completed'
+        };
+      }
+
+      if (sessionData.status === 'abandoned') {
+        return {
+          canResume: true,
+          suggestedAction: 'resume_session',
+          reason: 'Session can be resumed'
+        };
+      }
+
+      return {
+        canResume: true,
+        suggestedAction: 'continue_session'
+      };
+    } catch (error) {
+      Logger.error('Failed to analyze recovery options', error as Error);
+      return {
+        canResume: false,
+        suggestedAction: 'start_new_session',
+        reason: 'Analysis failed'
+      };
+    }
+  }
+
+  /**
+   * Get session data
+   */
+  private async getSessionData(sessionId: string, participantId: number): Promise<any> {
+    const result = await this.db
+      .select()
+      .from(quizSessions)
+      .where(
+        and(
+          eq(quizSessions.id, sessionId),
+          eq(quizSessions.participantId, participantId)
+        )
+      );
+
+    return result[0];
   }
 }
 

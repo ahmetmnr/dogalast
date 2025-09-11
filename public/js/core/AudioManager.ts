@@ -328,8 +328,7 @@ export class AudioManager {
         noiseSuppression: this.config.enableNoiseReduction,
         autoGainControl: this.config.enableAutoGainControl,
         // Additional constraints for better audio quality
-        sampleSize: 16,
-        latency: 0.01 // 10ms latency
+        sampleSize: 16
       },
       video: false
     };
@@ -505,7 +504,10 @@ export class AudioManager {
   private calculateRMSEnergy(audioData: Float32Array): number {
     let sum = 0;
     for (let i = 0; i < audioData.length; i++) {
-      sum += audioData[i] * audioData[i];
+      if (audioData && i < audioData.length && audioData[i] !== undefined) {
+        const value = audioData[i]!;
+        sum += value * value;
+      }
     }
     return Math.sqrt(sum / audioData.length);
   }
@@ -525,7 +527,6 @@ export class AudioManager {
 
     // Calculate statistics
     const sortedSamples = samples.sort((a, b) => a - b);
-    const median = sortedSamples[Math.floor(sortedSamples.length / 2)];
     const mean = samples.reduce((sum, val) => sum + val, 0) / samples.length;
     const std = Math.sqrt(
       samples.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / samples.length
@@ -533,18 +534,19 @@ export class AudioManager {
 
     // Background noise is the 75th percentile (to exclude occasional spikes)
     const backgroundNoise = sortedSamples[Math.floor(sortedSamples.length * 0.75)];
+    const backgroundNoiseValue = backgroundNoise !== undefined ? backgroundNoise : 0.002;
 
     // Recommended threshold is 2.5x background noise
-    const recommendedThreshold = Math.max(0.005, backgroundNoise * 2.5);
+    const recommendedThreshold = Math.max(0.005, backgroundNoiseValue * 2.5);
 
     // Signal-to-noise ratio estimation
-    const signalToNoiseRatio = backgroundNoise > 0 ? (mean / backgroundNoise) : 0;
+    const signalToNoiseRatio = backgroundNoiseValue > 0 ? (mean / backgroundNoiseValue) : 0;
 
     // Determine calibration quality
     let calibrationQuality: AudioCalibrationResult['calibrationQuality'];
-    if (std < backgroundNoise * 0.5 && signalToNoiseRatio > 3) {
+    if (std < backgroundNoiseValue * 0.5 && signalToNoiseRatio > 3) {
       calibrationQuality = 'excellent';
-    } else if (std < backgroundNoise && signalToNoiseRatio > 2) {
+    } else if (std < backgroundNoiseValue && signalToNoiseRatio > 2) {
       calibrationQuality = 'good';
     } else if (signalToNoiseRatio > 1.5) {
       calibrationQuality = 'fair';
@@ -553,7 +555,7 @@ export class AudioManager {
     }
 
     return {
-      backgroundNoise,
+      backgroundNoise: backgroundNoiseValue,
       recommendedThreshold,
       signalToNoiseRatio,
       calibrationQuality
@@ -568,8 +570,11 @@ export class AudioManager {
 
     for (let i = 0; i < float32Array.length; i++) {
       // Clamp to [-1, 1] and convert to 16-bit
-      const clamped = Math.max(-1, Math.min(1, float32Array[i]));
-      pcm16[i] = Math.floor(clamped * 0x7FFF);
+      if (float32Array && i < float32Array.length && float32Array[i] !== undefined) {
+        const value = float32Array[i]!;
+        const clamped = Math.max(-1, Math.min(1, value));
+        pcm16[i] = Math.floor(clamped * 0x7FFF);
+      }
     }
 
     return pcm16;
@@ -681,7 +686,10 @@ export class AudioUtils {
       const float32Array = audioBuffer.getChannelData(0);
 
       for (let i = 0; i < int16Array.length; i++) {
-        float32Array[i] = int16Array[i] / 0x7FFF;
+        if (int16Array && i < int16Array.length && int16Array[i] !== undefined) {
+          const value = int16Array[i]!;
+          float32Array[i] = value / 0x7FFF;
+        }
       }
 
       // Create source and play

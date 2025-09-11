@@ -5,7 +5,7 @@
 
 import { Context, Next } from 'hono';
 import { BaseMiddleware } from './BaseMiddleware';
-import type { Env } from '@/index';
+// Env type import removed - using any for now
 import { Environment } from '@/utils/environment';
 
 /**
@@ -127,7 +127,7 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
    * @param c Hono context
    * @param next Next middleware
    */
-  async handle(c: Context<{ Bindings: Env }>, next: Next): Promise<void> {
+  async handle(c: Context<{ Bindings: any }>, next: Next): Promise<void> {
     // Set request ID first
     this.setRequestId(c);
 
@@ -142,7 +142,7 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
    * Set security headers on response
    * @param c Hono context
    */
-  private setSecurityHeaders(c: Context<{ Bindings: Env }>): void {
+  private setSecurityHeaders(c: Context<{ Bindings: any }>): void {
     // Set default headers
     Object.entries(SecurityHeadersMiddleware.DEFAULT_HEADERS).forEach(([key, value]) => {
       c.header(key, value);
@@ -153,7 +153,7 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
     c.header('Content-Security-Policy', cspHeader);
 
     // Add request ID to response
-    const requestId = c.get('requestId');
+    const requestId = c.get('requestId' as never) as string;
     if (requestId) {
       c.header('X-Request-ID', requestId);
     }
@@ -167,7 +167,7 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
    * @param c Hono context
    * @returns CSP header string
    */
-  private generateCSPHeader(c: Context<{ Bindings: Env }>): string {
+  private generateCSPHeader(c: Context<{ Bindings: any }>): string {
     const isDevelopment = Environment.isDevelopment() || 
                          this.getEnvValue(c, 'ENVIRONMENT') === 'development';
     
@@ -189,7 +189,7 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
     });
 
     // Add report-uri if configured
-    const reportUri = this.getEnvValue(c, 'CSP_REPORT_URI' as keyof Env);
+    const reportUri = this.getEnvValue(c, 'CSP_REPORT_URI');
     if (reportUri) {
       cspParts.push(`report-uri ${reportUri}`);
       cspParts.push(`report-to csp-endpoint`);
@@ -202,7 +202,7 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
    * Set conditional headers based on request/response
    * @param c Hono context
    */
-  private setConditionalHeaders(c: Context<{ Bindings: Env }>): void {
+  private setConditionalHeaders(c: Context<{ Bindings: any }>): void {
     // Remove headers that might leak information
     c.header('X-Powered-By', '');
     c.header('Server', '');
@@ -253,7 +253,8 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
    * Create nonce for inline scripts (if needed)
    * @returns Nonce string
    */
-  private generateNonce(): string {
+  // Unused method removed
+  /*private generateNonce(): string {
     const array = new Uint8Array(16);
     crypto.getRandomValues(array);
     return btoa(String.fromCharCode.apply(null, Array.from(array)));
@@ -264,8 +265,9 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
    * @param c Hono context
    * @returns Report-To header value
    */
-  private getReportToHeader(c: Context<{ Bindings: Env }>): string {
-    const reportUri = this.getEnvValue(c, 'CSP_REPORT_URI' as keyof Env);
+  // Unused method removed
+  /*private getReportToHeader(c: Context<{ Bindings: any }>): string {
+    const reportUri = this.getEnvValue(c, 'CSP_REPORT_URI');
     if (!reportUri) return '';
 
     return JSON.stringify({
@@ -276,7 +278,7 @@ export class SecurityHeadersMiddleware extends BaseMiddleware {
       }],
       include_subdomains: true,
     });
-  }
+  }*/
 }
 
 /**

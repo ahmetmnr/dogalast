@@ -3,7 +3,7 @@
  * WebRTC-based real-time audio communication with OpenAI
  */
 
-import { api } from './ApiClient.ts';
+import { api } from './ApiClient';
 
 // ============================================================================
 // Types and Interfaces
@@ -19,22 +19,23 @@ export interface RealtimeConfig {
   onError: (error: RealtimeError) => void;
 }
 
-interface RealtimeSession {
-  id: string;
-  model: string;
-  voice: string;
-  turn_detection: {
-    type: 'server_vad';
-    threshold: number;
-    prefix_padding_ms: number;
-    silence_duration_ms: number;
-  };
-  input_audio_format: 'pcm16';
-  output_audio_format: 'pcm16';
-  input_audio_transcription: {
-    model: 'whisper-1';
-  };
-}
+// Unused interface - commented out
+// interface RealtimeSession {
+//   id: string;
+//   model: string;
+//   voice: string;
+//   turn_detection: {
+//     type: 'server_vad';
+//     threshold: number;
+//     prefix_padding_ms: number;
+//     silence_duration_ms: number;
+//   };
+//   input_audio_format: 'pcm16';
+//   output_audio_format: 'pcm16';
+//   input_audio_transcription: {
+//     model: 'whisper-1';
+//   };
+// }
 
 export type ConnectionState = 
   | 'disconnected' 
@@ -68,7 +69,6 @@ export class RealtimeClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
-  private sessionConfig: RealtimeSession | null = null;
   private audioQueue: QueuedAudio[] = [];
   private isProcessingAudio = false;
   private tokenRefreshTimer: number | null = null;
@@ -280,8 +280,12 @@ export class RealtimeClient {
       const response = await api.auth.getEphemeralToken(this.config.sessionId);
 
       if (response.success && response.data) {
-        this.ephemeralToken = response.data.clientSecret;
-        this.tokenExpiresAt = new Date(response.data.expiresAt).getTime();
+        interface TokenResponse {
+          clientSecret: string;
+          expiresAt: string;
+        }
+        this.ephemeralToken = (response.data as TokenResponse).clientSecret;
+        this.tokenExpiresAt = new Date((response.data as TokenResponse).expiresAt).getTime();
 
         // Schedule token refresh at 75% of expiry time
         const now = Date.now();
@@ -444,7 +448,7 @@ export class RealtimeClient {
           break;
 
         case 'response.audio.done':
-          this.handleAudioDone(message);
+          this.handleAudioDone();
           break;
 
         case 'response.done':
@@ -456,7 +460,8 @@ export class RealtimeClient {
           break;
 
         default:
-          if (__DEV__) {
+          const isDevelopment = process.env.NODE_ENV === 'development';
+          if (isDevelopment) {
             console.log('Unhandled OpenAI message type:', message.type);
           }
       }
@@ -496,7 +501,7 @@ export class RealtimeClient {
   /**
    * Handle audio completion from OpenAI
    */
-  private handleAudioDone(message: any): void {
+  private handleAudioDone(): void {
     console.log('OpenAI audio response completed');
     // Mark TTS end event here via backend API
   }
@@ -625,7 +630,10 @@ export class RealtimeClient {
     const bytes = new Uint8Array(buffer);
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
+      if (bytes && i < bytes.byteLength && bytes[i] !== undefined) {
+        const value = bytes[i]!;
+        binary += String.fromCharCode(value);
+      }
     }
     return btoa(binary);
   }

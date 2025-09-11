@@ -5,8 +5,7 @@
 
 import { Context, Next } from 'hono';
 import { BaseMiddleware } from './BaseMiddleware';
-import type { Env } from '@/index';
-import { Logger } from '@/utils/logger';
+// Env type import removed - using any for now
 import type { ApiError, ApiResponse } from '@/types/api';
 
 /**
@@ -118,7 +117,7 @@ export class ErrorHandlingMiddleware extends BaseMiddleware {
    * @param c Hono context
    * @param next Next middleware
    */
-  async handle(c: Context<{ Bindings: Env }>, next: Next): Promise<Response> {
+  async handle(c: Context<{ Bindings: any }>, next: Next): Promise<Response> {
     try {
       await next();
       
@@ -139,7 +138,7 @@ export class ErrorHandlingMiddleware extends BaseMiddleware {
    * @param c Hono context
    * @returns Error response
    */
-  protected handleError(error: Error, c: Context): Response {
+  protected override handleError(error: Error, c: Context): Response {
     const requestId = this.getRequestId(c);
     const isDevelopment = this.getEnvValue(c, 'ENVIRONMENT') === 'development';
 
@@ -156,7 +155,7 @@ export class ErrorHandlingMiddleware extends BaseMiddleware {
     let errorResponse: ErrorResponse;
 
     if (error instanceof ValidationError) {
-      errorResponse = this.handleValidationError(error, requestId);
+      errorResponse = this.handleValidationError(error);
     } else if (error instanceof AuthenticationError) {
       errorResponse = this.handleAuthenticationError(error, requestId);
     } else if (error instanceof AuthorizationError) {
@@ -179,13 +178,13 @@ export class ErrorHandlingMiddleware extends BaseMiddleware {
     // Set error response headers
     this.setErrorHeaders(c, error);
 
-    return c.json(errorResponse, statusCode);
+    return c.json(errorResponse, statusCode as any);
   }
 
   /**
    * Handle validation errors
    */
-  private handleValidationError(error: ValidationError, requestId: string): ErrorResponse {
+  private handleValidationError(error: ValidationError): ErrorResponse {
     return {
       success: false,
       error: {
@@ -375,15 +374,7 @@ export class ErrorHandlingMiddleware extends BaseMiddleware {
   /**
    * Check if error should be logged
    */
-  private shouldLogError(error: Error): boolean {
-    // Don't log client errors in production
-    if (error instanceof ValidationError || 
-        error instanceof NotFoundError) {
-      return this.getEnvValue({} as any, 'ENVIRONMENT') === 'development';
-    }
-
-    return true;
-  }
+  // Unused method removed
 
   /**
    * Get HTTP status code for error

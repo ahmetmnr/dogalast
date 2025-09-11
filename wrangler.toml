@@ -1,52 +1,116 @@
 name = "zero-waste-quiz"
 main = "src/index.ts"
-compatibility_date = "2024-06-20"
+compatibility_date = "2024-01-15"
 compatibility_flags = ["nodejs_compat"]
 
-# Build command removed for development
+# Global configuration
+[build]
+command = "bun run build:production"
 
-[vars]
-JWT_SECRET = "your-development-jwt-secret"
-
+# Development environment
 [env.development]
-ENVIRONMENT = "development"
-LOG_LEVEL = "debug"
-AUDIO_RETENTION_DAYS = "1"
-DATA_RETENTION_DAYS = "30"
-GDPR_COMPLIANCE_MODE = "true"
+name = "zero-waste-quiz-dev"
+vars = { 
+  NODE_ENV = "development", 
+  LOG_LEVEL = "debug",
+  ENABLE_CORS = "true",
+  ENABLE_LOGGING = "true",
+  ENABLE_ANALYTICS = "false"
+}
 
+# Development D1 Database
 [[env.development.d1_databases]]
 binding = "DB"
 database_name = "zero-waste-quiz-dev"
-database_id = "your-dev-d1-database-id"
-preview_database_id = "preview-db"
+database_id = "local"
 
+# Development KV Storage
+[[env.development.kv_namespaces]]
+binding = "CACHE"
+id = "local"
+preview_id = "local"
+
+# Development Durable Objects
+[[env.development.durable_objects]]
+name = "QUIZ_SESSION"
+class_name = "QuizSession"
+script_name = "zero-waste-quiz-dev"
+
+# Staging environment
+[env.staging]
+name = "zero-waste-quiz-staging"
+vars = { 
+  NODE_ENV = "staging", 
+  LOG_LEVEL = "info",
+  ENABLE_CORS = "true",
+  ENABLE_LOGGING = "true",
+  ENABLE_ANALYTICS = "true"
+}
+
+# Staging D1 Database
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "zero-waste-quiz-staging"
+database_id = "your-staging-database-id"
+
+# Staging KV Storage
+[[env.staging.kv_namespaces]]
+binding = "CACHE"
+id = "your-staging-kv-id"
+preview_id = "your-staging-kv-preview-id"
+
+# Staging Durable Objects
+[[env.staging.durable_objects]]
+name = "QUIZ_SESSION"
+class_name = "QuizSession"
+script_name = "zero-waste-quiz-staging"
+
+# Production environment
 [env.production]
-ENVIRONMENT = "production"
-LOG_LEVEL = "info"
-AUDIO_RETENTION_DAYS = "0"
-DATA_RETENTION_DAYS = "365"
-GDPR_COMPLIANCE_MODE = "true"
+name = "zero-waste-quiz-prod"
+vars = { 
+  NODE_ENV = "production", 
+  LOG_LEVEL = "warn",
+  ENABLE_CORS = "false",
+  ENABLE_LOGGING = "false",
+  ENABLE_ANALYTICS = "true",
+  SECURITY_HEADERS = "true",
+  HSTS_MAX_AGE = "31536000",
+  CSP_POLICY = "default-src 'self'; script-src 'self' 'unsafe-inline' https://api.openai.com; connect-src 'self' https://api.openai.com wss://api.openai.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:; media-src 'self' https:;",
+  RATE_LIMIT_ENABLED = "true",
+  RATE_LIMIT_GLOBAL = "1000",
+  RATE_LIMIT_REGISTRATION = "5",
+  RATE_LIMIT_TOOLS = "60",
+  RATE_LIMIT_ADMIN = "30"
+}
 
+# Production D1 Database
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "zero-waste-quiz-prod"
-database_id = "your-prod-d1-database-id"
+database_id = "your-production-database-id"
 
-[[env.production.durable_objects.bindings]]
-name = "SESSION_MANAGER"
-class_name = "SessionManager"
+# Production KV Storage
+[[env.production.kv_namespaces]]
+binding = "CACHE"
+id = "your-production-kv-id"
+preview_id = "your-production-kv-preview-id"
 
-[[env.production.durable_objects.bindings]]
-name = "LEADERBOARD_BROADCASTER"
-class_name = "LeaderboardBroadcaster"
+# Production Durable Objects
+[[env.production.durable_objects]]
+name = "QUIZ_SESSION"
+class_name = "QuizSession"
+script_name = "zero-waste-quiz-prod"
 
-[durable_objects]
-bindings = [
-  { name = "SESSION_MANAGER", class_name = "SessionManager" },
-  { name = "LEADERBOARD_BROADCASTER", class_name = "LeaderboardBroadcaster" }
-]
+# Custom domains (production only)
+[[env.production.routes]]
+pattern = "quiz.sifiratiketkinligi.com/*"
+zone_name = "sifiratiketkinligi.com"
 
-[[migrations]]
-tag = "v1"
-new_classes = ["SessionManager", "LeaderboardBroadcaster"]
+[[env.production.routes]]
+pattern = "api.sifiratiketkinligi.com/*"
+zone_name = "sifiratiketkinligi.com"
+
+# Analytics and monitoring
+[observability]
+enabled = true

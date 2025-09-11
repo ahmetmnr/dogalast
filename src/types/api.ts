@@ -3,6 +3,61 @@
  * Base types for all API communications
  */
 
+import { Context } from 'hono'
+import type { DatabaseInstance } from '@/db/connection'
+
+// Hono Context Variables interface
+export interface ContextVariables {
+  user?: UserContext
+  db: DatabaseInstance
+  validatedBody?: any
+  validatedQuery?: any
+  validatedParams?: any
+}
+
+// Extend Hono Context with our variables
+export type AppContext = Context<{
+  Variables: ContextVariables
+}>
+
+// User context interface
+export interface UserContext {
+  id: string
+  name: string
+  email?: string
+  role: 'user' | 'admin' | 'super_admin'
+  permissions: string[]
+  sessionId?: string
+}
+
+// Tool dispatch request interface
+export interface ToolDispatchRequest {
+  tool: string
+  args: Record<string, any>
+  sessionId?: string
+  idempotencyKey?: string
+}
+
+// Leaderboard query interface
+export interface LeaderboardQuery {
+  limit: number
+  offset: number
+  period: 'all' | 'today' | 'week' | 'month'
+}
+
+export interface ToolExecutionResult {
+  success: boolean
+  result?: any
+  error?: {
+    code: string
+    message: string
+  }
+  timing: {
+    serverTimestamp: number
+    processingTime: number
+  }
+}
+
 /**
  * Base API response structure
  * @template T The type of the data payload
@@ -16,6 +71,12 @@ export interface ApiResponse<T = any> {
   
   /** Error information (only present on failure) */
   error?: ApiError;
+  
+  /** Timing information */
+  timing?: {
+    serverTimestamp: number;
+    processingTime: number;
+  };
   
   /** ISO timestamp of the response */
   timestamp: string;

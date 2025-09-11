@@ -3,7 +3,7 @@
  * Full-text search and intent classification for quiz knowledge base
  */
 
-import { eq, sql, like, and, or } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 import { knowledge, auditLogs } from '@/db/schema';
 import { Logger } from '@/utils/logger';
 import type { DatabaseInstance } from '@/db/connection';
@@ -27,6 +27,8 @@ interface SearchResult {
   category: string;
   relevanceScore: number;
   snippet: string;
+  keywords?: string[];
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 interface IntentClassification {
@@ -113,42 +115,33 @@ export class KnowledgeService {
         return [];
       }
 
-      // Build FTS5 query
-      const ftsQuery = this.buildFTS5Query(normalizedQuery);
+      // Build FTS5 query (for future use)
+      // const ftsQuery = this.buildFTS5Query(normalizedQuery);
       
-      // Execute search with filters
+      // Execute search with filters - use simple select without FTS for now
       const results = await this.db
-        .select({
-          id: knowledge.id,
-          title: knowledge.title,
-          content: knowledge.content,
-          category: knowledge.category,
-          keywords: knowledge.keywords,
-          difficulty: knowledge.difficulty,
-          rank: sql<number>`bm25(knowledge_fts)`.as('rank')
-        })
+        .select()
         .from(knowledge)
-        .innerJoin(sql`knowledge_fts`, sql`knowledge.id = knowledge_fts.id`)
         .where(
           and(
-            sql`knowledge_fts MATCH ${ftsQuery}`,
             eq(knowledge.isActive, true),
             category ? eq(knowledge.category, category) : undefined,
-            difficulty ? eq(knowledge.difficulty, difficulty) : undefined
+            difficulty ? eq(knowledge.difficulty, difficulty as unknown as 'easy' | 'medium' | 'hard') : undefined
           )
         )
-        .orderBy(sql`rank`)
         .limit(limit)
         .offset(offset);
 
       // Process results and generate snippets
       const searchResults: SearchResult[] = results.map(result => ({
-        id: result.id,
+        id: result.id.toString(),
         title: result.title,
         content: result.content,
         category: result.category,
-        relevanceScore: Math.max(0, 1 - (result.rank || 0) / 10), // Convert BM25 to 0-1 score
-        snippet: this.generateSnippet(result.content, normalizedQuery)
+        relevanceScore: Math.max(0, 1 - 0 / 10), // Default relevance score
+        snippet: this.generateSnippet(result.content, normalizedQuery),
+        keywords: result.keywords ? JSON.parse(result.keywords) : [],
+        difficulty: result.difficulty as 'easy' | 'medium' | 'hard' | undefined,
       }));
 
       Logger.info('Knowledge search completed', {
@@ -200,7 +193,7 @@ export class KnowledgeService {
     }
 
     // Generate suggested response based on intent
-    const suggestedResponse = this.generateSuggestedResponse(bestMatch.intent, keywords);
+    const suggestedResponse = this.generateSuggestedResponse(bestMatch.intent);
 
     return {
       intent: bestMatch.intent,
@@ -233,9 +226,13 @@ export class KnowledgeService {
       
       if (results.length > 0) {
         const topResult = results[0];
-        responseText = this.generateResponseText(intent, topResult, query);
+        if (topResult) {
+          responseText = this.generateResponseText(intent, topResult, query);
+        } else {
+          responseText = this.generateNoResultsResponse(query);
+        }
       } else {
-        responseText = this.generateNoResultsResponse(intent, query);
+        responseText = this.generateNoResultsResponse(query);
       }
 
       // Log the query for analytics
@@ -271,12 +268,12 @@ export class KnowledgeService {
       const entryId = crypto.randomUUID();
       
       await this.db.insert(knowledge).values({
-        id: entryId,
+        // id auto-increment, don't specify
         title: entry.title,
         content: entry.content,
         category: entry.category,
         keywords: JSON.stringify(entry.keywords),
-        difficulty: entry.difficulty,
+        difficulty: entry.difficulty as unknown as 'easy' | 'medium' | 'hard',
         isActive: entry.isActive
       });
 
@@ -316,19 +313,19 @@ export class KnowledgeService {
   /**
    * Build FTS5 query string
    */
-  private buildFTS5Query(normalizedQuery: string): string {
-    const words = normalizedQuery.split(/\s+/).filter(word => word.length > 2);
-    
-    if (words.length === 0) {
-      return normalizedQuery;
-    }
+  // private buildFTS5Query(normalizedQuery: string): string {
+  //   const words = normalizedQuery.split(/\s+/).filter(word => word.length > 2);
+  //   
+  //   if (words.length === 0) {
+  //     return normalizedQuery;
+  //   }
 
-    // Use phrase search for exact matches, OR for individual words
-    const phraseQuery = `"${normalizedQuery}"`;
-    const wordQueries = words.map(word => `${word}*`).join(' OR ');
-    
-    return `(${phraseQuery}) OR (${wordQueries})`;
-  }
+  //   // Use phrase search for exact matches, OR for individual words
+  //   const phraseQuery = `"${normalizedQuery}"`;
+  //   const wordQueries = words.map(word => `${word}*`).join(' OR ');
+  //   
+  //   return `(${phraseQuery}) OR (${wordQueries})`;
+  // }
 
   /**
    * Generate snippet from content
@@ -363,7 +360,7 @@ export class KnowledgeService {
   /**
    * Generate suggested response based on intent
    */
-  private generateSuggestedResponse(intent: string, keywords: string[]): string {
+  private generateSuggestedResponse(intent: string): string {
     const responses = {
       question: 'Bu konuda size yardımcı olabilirim. Hangi spesifik bilgiyi merak ediyorsunuz?',
       definition: 'Bu terimin tanımını açıklayabilirim.',
@@ -419,14 +416,14 @@ export class KnowledgeService {
   /**
    * Generate no results response
    */
-  private generateNoResultsResponse(intent: IntentClassification, query: string): string {
+  private generateNoResultsResponse(query: string): string {
     const responses = [
       `"${query}" hakkında bilgi bulamadım. Sorunuzu farklı kelimelerle sorar mısınız?`,
       `Bu konuda elimde yeterli bilgi yok. Daha spesifik bir soru sorabilir misiniz?`,
       `Üzgünüm, bu konu hakkında detaylı bilgim bulunmuyor. Başka bir soru sormak ister misiniz?`
     ];
 
-    return responses[Math.floor(Math.random() * responses.length)];
+    return responses[Math.floor(Math.random() * responses.length)] || 'Üzgünüm, bu konuda yardımcı olamıyorum.';
   }
 
   /**

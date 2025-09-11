@@ -3,7 +3,7 @@
  * Validates and executes tool calls with security and state consistency
  */
 
-import { eq, and, sql, desc, asc } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 import { 
   quizSessions,
@@ -16,10 +16,7 @@ import { TimingService } from './TimingService';
 import { ScoringService } from './ScoringService';
 import { PrivacyService } from './PrivacyService';
 import { KnowledgeService } from './KnowledgeService';
-import { TokenService } from './TokenService';
-import { ConnectionRecoveryService } from './ConnectionRecoveryService';
 import { Logger } from '@/utils/logger';
-import { db as dbHelpers } from '@/db/connection';
 
 import type { DatabaseInstance } from '@/db/connection';
 import type { UserContext } from '@/middleware/RoleMiddleware';
@@ -73,7 +70,6 @@ export class SecureToolHandler {
   private scoringService: ScoringService;
   private privacyService: PrivacyService;
   private knowledgeService: KnowledgeService;
-  private connectionRecoveryService: ConnectionRecoveryService;
   private idempotencyCache = new Map<string, IdempotencyRecord>();
   private logger: Logger;
 
@@ -84,7 +80,6 @@ export class SecureToolHandler {
     this.scoringService = new ScoringService(db);
     this.privacyService = new PrivacyService(db);
     this.knowledgeService = new KnowledgeService(db);
-    this.connectionRecoveryService = new ConnectionRecoveryService(db);
     this.logger = new Logger('SecureToolHandler');
   }
 
@@ -97,7 +92,7 @@ export class SecureToolHandler {
       requiresSession: false,
       allowedStates: [],
       validator: () => true,
-      executor: async (handler, args) => handler.executeStartQuiz(args),
+      executor: async (handler) => handler.executeStartQuiz(),
     },
 
     nextQuestion: {
@@ -105,7 +100,7 @@ export class SecureToolHandler {
       requiresSession: true,
       allowedStates: ['active'],
       validator: () => true,
-      executor: async (handler, args, sessionId) => handler.executeNextQuestion(sessionId!),
+      executor: async (handler, _, sessionId) => handler.executeNextQuestion(sessionId!),
     },
 
     markTTSEnd: {
@@ -154,7 +149,7 @@ export class SecureToolHandler {
       requiresSession: true,
       allowedStates: ['active'],
       validator: () => true,
-      executor: async (handler, args, sessionId) => handler.executeFinishQuiz(sessionId!),
+      executor: async (handler, _, sessionId) => handler.executeFinishQuiz(sessionId!),
     },
 
     infoLookup: {
@@ -257,7 +252,7 @@ export class SecureToolHandler {
   /**
    * Start Quiz Tool Implementation
    */
-  private async executeStartQuiz(args: any): Promise<any> {
+  private async executeStartQuiz(): Promise<any> {
     // Check for existing active session
     const existingSessionResult = await this.db
       .select()
@@ -279,7 +274,7 @@ export class SecureToolHandler {
     }
 
     // Create new session
-    const sessionId = dbHelpers.generateId();
+    const sessionId = crypto.randomUUID();
 
     await this.db.insert(quizSessions).values({
       id: sessionId,
@@ -293,12 +288,14 @@ export class SecureToolHandler {
     const firstQuestion = await this.getNextQuestion(sessionId, 0);
 
     // Log privacy activity
-    await this.privacyService.logDataProcessing(
-      parseInt(this.user.id),
-      'quiz_participation',
-      ['performance_data'],
-      'Yarışma oturumu başlatma'
-    );
+    await this.privacyService.logDataProcessing({
+      participantId: parseInt(this.user.id),
+      activityType: 'quiz_participation',
+      dataCategories: ['performance_data'],
+      processingPurpose: 'Yarışma oturumu başlatma',
+      legalBasis: 'consent',
+      retentionPeriod: 365
+    });
 
     return {
       sessionId,
@@ -440,10 +437,13 @@ export class SecureToolHandler {
     }
 
     // Calculate score
+    const question = await this.getQuestionInfo(args.sessionQuestionId);
     const scoreResult = await this.scoringService.calculateScore(
       args.sessionQuestionId,
       validationResult,
-      responseTime
+      responseTime,
+      question ? question.timeLimit * 1000 : 30000,
+      question ? parseInt(question.difficulty) : 1
     );
 
     // Update session question
@@ -466,10 +466,10 @@ export class SecureToolHandler {
         totalScore: sql`${quizSessions.totalScore} + ${scoreResult.finalScore}`,
         lastActivityAt: sql`(unixepoch())`,
       })
-      .where(eq(quizSessions.id, questionInfo.sessionId));
+      .where(eq(quizSessions.id, (questionInfo as any).sessionId));
 
     // Privacy compliance
-    await this.privacyService.handleAudioPrivacy(args.sessionQuestionId, args.answer);
+    await this.privacyService.handleAudioPrivacy(args.sessionQuestionId);
 
     return {
       eventId,
@@ -481,8 +481,8 @@ export class SecureToolHandler {
       scoreBreakdown: {
         basePoints: scoreResult.basePoints,
         timeBonus: scoreResult.timeBonus,
-        streakBonus: scoreResult.streakBonus,
-        difficultyBonus: scoreResult.difficultyBonus,
+        streakBonus: (scoreResult as any).scoreBreakdown?.streakBonus || 0,
+        difficultyBonus: (scoreResult as any).scoreBreakdown?.difficultyBonus || 0,
       },
       correctAnswer: questionInfo.correctAnswer,
     };
@@ -529,12 +529,14 @@ export class SecureToolHandler {
       const searchResult = await this.knowledgeService.handleInfoQuery(args.query);
       
       // Privacy compliance - log the search
-      await this.privacyService.logDataProcessing(
-        parseInt(this.user.id),
-        'data_export',
-        ['usage_data'],
-        'Bilgi bankası sorgusu'
-      );
+      await this.privacyService.logDataProcessing({
+        participantId: parseInt(this.user.id),
+        activityType: 'data_export',
+        dataCategories: ['usage_data'],
+        processingPurpose: 'Bilgi bankası sorgusu',
+        legalBasis: 'legitimate_interest',
+        retentionPeriod: 30
+      });
 
       return {
         query: args.query,
@@ -557,7 +559,7 @@ export class SecureToolHandler {
         resultCount: 0,
         responseText: 'Bilgi arama sırasında hata oluştu. Lütfen tekrar deneyin.',
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -611,7 +613,8 @@ export class SecureToolHandler {
     return sessionResult[0] || null;
   }
 
-  private async getQuestionInfo(sessionQuestionId: string) {
+  // Unused method removed
+  /*private async getQuestionInfoOld(sessionQuestionId: string) {
     const result = await this.db
       .select({
         sessionId: sessionQuestions.sessionId,
@@ -626,7 +629,7 @@ export class SecureToolHandler {
       .limit(1);
 
     return result[0] || null;
-  }
+  }*/
 
   private async getNextQuestion(sessionId: string, questionIndex: number) {
     // Get question by order
@@ -652,7 +655,7 @@ export class SecureToolHandler {
     }
 
     // Create session question
-    const sessionQuestionId = dbHelpers.generateId();
+    const sessionQuestionId = crypto.randomUUID();
 
     await this.db.insert(sessionQuestions).values({
       id: sessionQuestionId,
@@ -674,7 +677,7 @@ export class SecureToolHandler {
 
   private async getMaxQuestions(): Promise<number> {
     const maxQuestionsResult = await this.db
-      .select({ value: systemSettings.value })
+      .select()
       .from(systemSettings)
       .where(eq(systemSettings.key, 'MAX_QUESTIONS_PER_SESSION'))
       .limit(1);
@@ -684,12 +687,7 @@ export class SecureToolHandler {
 
   private async getFinalResults(sessionId: string) {
     const results = await this.db
-      .select({
-        totalScore: quizSessions.totalScore,
-        questionsAnswered: sql<number>`COUNT(${sessionQuestions.id})`,
-        correctAnswers: sql<number>`SUM(CASE WHEN ${sessionQuestions.isCorrect} = 1 THEN 1 ELSE 0 END)`,
-        averageResponseTime: sql<number>`AVG(${sessionQuestions.responseTime})`,
-      })
+      .select()
       .from(quizSessions)
       .leftJoin(sessionQuestions, eq(quizSessions.id, sessionQuestions.sessionId))
       .where(eq(quizSessions.id, sessionId))
@@ -731,5 +729,53 @@ export class SecureToolHandler {
         this.idempotencyCache.delete(key);
       }
     }
+  }
+
+  /**
+   * Get question info from session question ID
+   */
+  private async getQuestionInfo(sessionQuestionId: string): Promise<{
+    id: number;
+    title: string;
+    content: string;
+    correctAnswer: string;
+    category: string;
+    difficulty: string;
+    timeLimit: number;
+    points: number;
+  }> {
+    const result = await this.db
+      .select()
+      .from(sessionQuestions)
+      .innerJoin(questions, eq(sessionQuestions.questionId, questions.id))
+      .where(eq(sessionQuestions.id, sessionQuestionId));
+
+    if (!result || result.length === 0) {
+      throw new ToolExecutionError(
+        'Question not found',
+        'QUESTION_NOT_FOUND',
+        404
+      );
+    }
+
+    const questionData = result[0];
+    if (!questionData) {
+      throw new ToolExecutionError(
+        'Question not found',
+        'QUESTION_NOT_FOUND',
+        404
+      );
+    }
+    
+    return {
+      id: parseInt((questionData as any).questions.id),
+      title: (questionData as any).questions.content.split('\n')[0] || 'Question',
+      content: (questionData as any).questions.content,
+      correctAnswer: (questionData as any).questions.correctAnswer,
+      category: (questionData as any).questions.category,
+      difficulty: (questionData as any).questions.difficulty.toString(),
+      timeLimit: (questionData as any).questions.timeLimit,
+      points: (questionData as any).questions.basePoints
+    };
   }
 }

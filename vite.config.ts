@@ -1,100 +1,128 @@
-import { defineConfig } from 'vite';
-import { resolve } from 'path';
+import { defineConfig } from 'vite'
+import path from 'path'
 
-export default defineConfig(({ command, mode }) => {
-  const isDev = mode === 'development';
+export default defineConfig({
+  // Path aliases configuration
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@public': path.resolve(__dirname, './public'),
+      '@tests': path.resolve(__dirname, './tests'),
+      '@controllers': path.resolve(__dirname, './src/controllers'),
+      '@services': path.resolve(__dirname, './src/services'),
+      '@middleware': path.resolve(__dirname, './src/middleware'),
+      '@routes': path.resolve(__dirname, './src/routes'),
+      '@types': path.resolve(__dirname, './src/types'),
+      '@db': path.resolve(__dirname, './src/db'),
+      '@utils': path.resolve(__dirname, './src/utils'),
+      '@components': path.resolve(__dirname, './public/js/components'),
+      '@core': path.resolve(__dirname, './public/js/core'),
+      '@config': path.resolve(__dirname, './src/config')
+    }
+  },
   
-  return {
-    // Root directory for frontend files
-    root: 'public',
-    
-    // Build configuration
-    build: {
-      target: 'es2022',
-      outDir: '../dist/public',
-      emptyOutDir: true,
-      sourcemap: isDev,
-      minify: isDev ? false : 'esbuild',
-      
-      // Bundle optimization
-      rollupOptions: {
-        input: {
-          main: resolve(__dirname, 'public/index.html'),
-          quiz: resolve(__dirname, 'public/quiz.html'),
-          register: resolve(__dirname, 'public/register.html'),
-          admin: resolve(__dirname, 'public/admin.html'),
+  // Build configuration
+  build: {
+    target: 'esnext',
+    minify: 'esbuild',
+    sourcemap: true,
+    outDir: 'dist/public',
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'public/index.html'),
+        quiz: path.resolve(__dirname, 'public/quiz.html'),
+        register: path.resolve(__dirname, 'public/register.html'),
+        admin: path.resolve(__dirname, 'public/admin.html'),
+        'admin-login': path.resolve(__dirname, 'public/admin-login.html')
+      },
+      output: {
+        manualChunks: {
+          vendor: ['hono'],
+          utils: ['zod', 'jose'],
+          audio: ['@openai/realtime-api-beta'],
+          charts: ['chart.js']
         },
-        output: {
-          manualChunks: {
-            'api-client': ['./js/core/ApiClient.js'],
-          },
-          chunkFileNames: 'assets/[name]-[hash].js',
-          entryFileNames: 'assets/[name]-[hash].js',
-          assetFileNames: 'assets/[name]-[hash].[ext]',
-        },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    },
+    // Performance budgets
+    chunkSizeWarningLimit: 1000,
+    assetsInlineLimit: 4096
+  },
+  
+  // Development server configuration
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+    open: false,
+    cors: true,
+    // Proxy configuration for backend API
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path
       },
-      
-      // Asset handling
-      assetsInlineLimit: 4096, // 4KB inline threshold
-      cssCodeSplit: true,
-    },
-    
-    // Development server
-    server: {
-      port: 3000,
-      host: true,
-      strictPort: true,
-      
-      // Backend API proxy
-      proxy: {
-        '/api': {
-          target: 'http://localhost:8787',
-          changeOrigin: true,
-          secure: false,
-          configure: (proxy) => {
-            proxy.on('error', (err) => {
-              console.log('Proxy error:', err);
-            });
-          },
-        },
+      '/ws': {
+        target: 'ws://localhost:8787',
+        ws: true,
+        changeOrigin: true
       },
-      
-      // CORS for development
-      cors: true,
-      
-      // HMR configuration
-      hmr: {
-        overlay: true,
-      },
+      // Admin routes
+      '/admin/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+        secure: false
+      }
     },
-    
-    // Path resolution for TypeScript files
-    resolve: {
-      alias: {
-        '@': resolve(__dirname, 'public'),
-      },
-    },
-    
-    // CSS processing
-    css: {
-      devSourcemap: isDev,
-    },
-    
-    // Environment variables
-    define: {
-      __DEV__: JSON.stringify(isDev),
-    },
-    
-    // Preview server (for production testing)
-    preview: {
+    // Hot reload configuration
+    hmr: {
       port: 3001,
-      host: true,
-      proxy: {
-        '/api': {
-          target: 'http://localhost:8787',
-          changeOrigin: true,
-        },
-      },
-    },
-  };
-});
+      overlay: true
+    }
+  },
+  
+  // Preview server configuration
+  preview: {
+    port: 3002,
+    host: '0.0.0.0',
+    cors: true
+  },
+  
+  // CSS configuration
+  css: {
+    devSourcemap: true,
+    preprocessorOptions: {
+      scss: {
+        additionalData: `@import "@/styles/variables.scss";`
+      }
+    }
+  },
+  
+  // Environment variables
+  define: {
+    __DEV__: JSON.stringify(process.env.NODE_ENV === 'development'),
+    __PROD__: JSON.stringify(process.env.NODE_ENV === 'production'),
+    __VERSION__: JSON.stringify(process.env['npm_package_version'] || '0.0.1')
+  },
+  
+  // Optimization
+  optimizeDeps: {
+    include: ['zod', 'jose'],
+    exclude: ['@openai/realtime-api-beta']
+  },
+  
+  // Plugin configuration
+  plugins: [
+    // Add plugins as needed
+  ],
+  
+  // Worker configuration
+  worker: {
+    format: 'es'
+  }
+})

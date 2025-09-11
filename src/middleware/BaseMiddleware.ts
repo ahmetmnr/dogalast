@@ -5,7 +5,7 @@
 
 import { Context, Next } from 'hono';
 import { Logger } from '@/utils/logger';
-import type { Env } from '@/index';
+// Env type import removed - using any for now
 
 /**
  * Base middleware abstract class
@@ -18,7 +18,7 @@ export abstract class BaseMiddleware {
    * @param c Hono context
    * @param next Next middleware
    */
-  abstract handle(c: Context<{ Bindings: Env }>, next: Next): Promise<Response | void>;
+  abstract handle(c: Context<{ Bindings: any }>, next: Next): Promise<Response | void>;
 
   /**
    * Get client IP address
@@ -33,7 +33,8 @@ export abstract class BaseMiddleware {
     const xForwardedFor = c.req.header('X-Forwarded-For');
     if (xForwardedFor) {
       // Take the first IP from the comma-separated list
-      return xForwardedFor.split(',')[0].trim();
+      const firstIp = xForwardedFor.split(',')[0];
+      return firstIp ? firstIp.trim() : '';
     }
 
     const xRealIP = c.req.header('X-Real-IP');
@@ -68,7 +69,7 @@ export abstract class BaseMiddleware {
     if (headerRequestId) return headerRequestId;
 
     // Generate new one
-    return Logger.createRequestId();
+    return crypto.randomUUID();
   }
 
   /**
@@ -133,7 +134,7 @@ export abstract class BaseMiddleware {
    * @param defaultValue Default value
    * @returns Environment value
    */
-  protected getEnvValue(c: Context<{ Bindings: Env }>, key: keyof Env, defaultValue?: string): string {
+  protected getEnvValue(c: Context<{ Bindings: any }>, key: string, defaultValue?: string): string {
     const value = c.env[key];
     if (value === undefined || value === null) {
       return defaultValue || '';
@@ -226,7 +227,7 @@ export abstract class BaseMiddleware {
    * @returns Middleware function
    */
   create() {
-    return async (c: Context<{ Bindings: Env }>, next: Next) => {
+    return async (c: Context<{ Bindings: any }>, next: Next) => {
       try {
         return await this.handle(c, next);
       } catch (error) {

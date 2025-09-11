@@ -9,7 +9,6 @@ import {
   text, 
   integer, 
   real,
-  primaryKey,
   unique,
   index,
 } from 'drizzle-orm/sqlite-core';
@@ -67,6 +66,8 @@ export const quizSessions = sqliteTable('quiz_sessions', {
   }).notNull(),
   totalScore: integer('total_score').default(0).notNull(),
   currentQuestionIndex: integer('current_question_index').default(0).notNull(),
+  questionsAnswered: integer('questions_answered').default(0).notNull(),
+  correctAnswers: integer('correct_answers').default(0).notNull(),
   startedAt: integer('started_at', { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
   completedAt: integer('completed_at', { mode: 'timestamp' }),
   lastActivityAt: integer('last_activity_at', { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(), // For deterministic ordering
@@ -84,6 +85,22 @@ export const quizSessions = sqliteTable('quiz_sessions', {
     ).where(sql`status = 'completed'`),
   };
 });
+
+/**
+ * Session state interface
+ */
+export interface SessionState {
+  id: string;
+  participantId: number;
+  status: 'active' | 'completed' | 'paused' | 'abandoned';
+  currentQuestionIndex: number;
+  totalScore: number;
+  questionsAnswered: number;
+  correctAnswers: number;
+  startedAt: Date;
+  completedAt?: Date;
+  lastActivityAt: Date;
+}
 
 /**
  * Questions table - Sorular
@@ -182,8 +199,11 @@ export const knowledge = sqliteTable('knowledge', {
   content: text('content').notNull(),
   tags: text('tags'), // Comma-separated tags
   category: text('category').default('zero_waste').notNull(),
+  keywords: text('keywords'), // JSON string for search keywords
+  difficulty: text('difficulty', { enum: ['easy', 'medium', 'hard'] }).default('medium'),
   sourceUrl: text('source_url'),
   confidenceScore: real('confidence_score').default(1.0).notNull(),
+  relevanceScore: real('relevance_score').default(0),
   isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),

@@ -3,7 +3,7 @@
  * Handles KVKK compliance, data retention, consent, and user privacy
  */
 
-import { eq, and, sql, lt, inArray } from 'drizzle-orm';
+import { eq, sql, lt, inArray } from 'drizzle-orm';
 
 import {
   participants,
@@ -11,7 +11,6 @@ import {
   dataProcessingActivities,
   consentRecords,
   auditLogs,
-  questionTimings,
   sessionQuestions,
 } from '@/db/schema';
 import { Environment } from '@/utils/environment';
@@ -57,7 +56,7 @@ export class PrivacyService {
   /**
    * Handles audio data with privacy compliance
    */
-  async handleAudioPrivacy(sessionQuestionId: string, transcript: string): Promise<void> {
+  async handleAudioPrivacy(sessionQuestionId: string): Promise<void> {
     try {
       if (Environment.getAudioRetentionDays() > 0) {
         Logger.warn('Audio retention policy violation: audio should not be stored.');
@@ -94,8 +93,8 @@ export class PrivacyService {
 
       const auditCutoff = new Date();
       auditCutoff.setDate(auditCutoff.getDate() - 2555);
-      const deletedLogsResult = await this.db.delete(auditLogs).where(lt(auditLogs.createdAt, auditCutoff.getTime()));
-      deleted += deletedLogsResult.changes || 0;
+      const deletedLogsResult = await this.db.delete(auditLogs).where(lt(auditLogs.createdAt, auditCutoff));
+      deleted += (deletedLogsResult as any).changes || 0;
       
       Logger.info('Data retention policies enforced', { deleted, anonymized });
       return { deleted, anonymized };
@@ -213,18 +212,18 @@ export class PrivacyService {
 
   private async getParticipantIdFromQuestion(sessionQuestionId: string): Promise<number> {
     const result = await this.db
-      .select({ participantId: quizSessions.participantId })
+      .select()
       .from(sessionQuestions)
       .innerJoin(quizSessions, eq(sessionQuestions.sessionId, quizSessions.id))
       .where(eq(sessionQuestions.id, sessionQuestionId))
       .limit(1);
     
     if (!result[0]) throw new Error('Participant not found for session question');
-    return result[0].participantId;
+    return result[0].quiz_sessions.participantId;
   }
   
   private async anonymizeOldData(cutoffDate: Date): Promise<number> {
-    const oldSessions = await this.db.select({ participantId: quizSessions.participantId }).from(quizSessions).where(lt(quizSessions.lastActivityAt, cutoffDate));
+    const oldSessions = await this.db.select().from(quizSessions).where(lt(quizSessions.lastActivityAt, cutoffDate));
     
     const participantIds = oldSessions.map(s => s.participantId);
     if(participantIds.length === 0) return 0;
@@ -235,7 +234,7 @@ export class PrivacyService {
       phone: null,
     }).where(inArray(participants.id, participantIds));
     
-    return result.changes || 0;
+    return (result as any).changes || 0;
   }
 }
 

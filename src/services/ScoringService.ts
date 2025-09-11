@@ -11,6 +11,8 @@ import {
   questions,
 } from '@/db/schema';
 import { Logger } from '@/utils/logger';
+
+const logger = new Logger('scoring-service');
 import type { DatabaseInstance } from '@/db/connection';
 
 interface AnswerValidationResult {
@@ -102,75 +104,6 @@ export class ScoringService {
     }
   }
 
-  /**
-   * Calculate score for an answer
-   */
-  calculateScore(
-    isCorrect: boolean,
-    basePoints: number,
-    responseTimeMs: number,
-    timeLimitMs: number,
-    difficulty: number,
-    currentStreak: number = 0
-  ): ScoreCalculationResult {
-    let finalScore = 0;
-    const breakdown = {
-      basePts: 0,
-      timeBonusPts: 0,
-      streakBonusPts: 0,
-      difficultyBonusPts: 0,
-    };
-
-    if (!isCorrect) {
-      return {
-        basePoints: 0,
-        timeBonus: 0,
-        streakMultiplier: 0,
-        difficultyMultiplier: 0,
-        finalScore: 0,
-        breakdown,
-      };
-    }
-
-    // Base points
-    breakdown.basePts = basePoints;
-    finalScore += basePoints;
-
-    // Time bonus (faster answers get bonus)
-    const timePercentage = responseTimeMs / timeLimitMs;
-    if (timePercentage <= 0.5) {
-      // Very fast (under 50% of time limit)
-      breakdown.timeBonusPts = Math.round(basePoints * 0.5);
-    } else if (timePercentage <= 0.7) {
-      // Fast (under 70% of time limit)
-      breakdown.timeBonusPts = Math.round(basePoints * 0.3);
-    } else if (timePercentage <= 0.9) {
-      // Normal speed (under 90% of time limit)
-      breakdown.timeBonusPts = Math.round(basePoints * 0.1);
-    }
-    finalScore += breakdown.timeBonusPts;
-
-    // Streak bonus
-    if (currentStreak >= 3) {
-      breakdown.streakBonusPts = Math.round(basePoints * 0.2 * Math.min(currentStreak / 5, 2));
-      finalScore += breakdown.streakBonusPts;
-    }
-
-    // Difficulty multiplier
-    if (difficulty >= 4) {
-      breakdown.difficultyBonusPts = Math.round(basePoints * (difficulty - 3) * 0.1);
-      finalScore += breakdown.difficultyBonusPts;
-    }
-
-    return {
-      basePoints,
-      timeBonus: breakdown.timeBonusPts,
-      streakMultiplier: breakdown.streakBonusPts,
-      difficultyMultiplier: breakdown.difficultyBonusPts,
-      finalScore,
-      breakdown,
-    };
-  }
 
   /**
    * Get leaderboard with tie-breaking
@@ -178,16 +111,7 @@ export class ScoringService {
   async getLeaderboardWithTieBreaking(limit: number = 50, offset: number = 0): Promise<LeaderboardEntry[]> {
     try {
       const leaderboardData = await this.db
-        .select({
-          participantId: participants.id,
-          participantName: participants.name,
-          totalScore: quizSessions.totalScore,
-          completedAt: quizSessions.completedAt,
-          lastActivityAt: quizSessions.lastActivityAt,
-          questionsAnswered: sql<number>`count(${sessionQuestions.id})`.as('questionsAnswered'),
-          correctAnswers: sql<number>`sum(case when ${sessionQuestions.isCorrect} then 1 else 0 end)`.as('correctAnswers'),
-          averageResponseTime: sql<number>`avg(${sessionQuestions.responseTime})`.as('averageResponseTime'),
-        })
+        .select()
         .from(quizSessions)
         .innerJoin(participants, eq(quizSessions.participantId, participants.id))
         .leftJoin(sessionQuestions, eq(sessionQuestions.sessionId, quizSessions.id))
@@ -209,11 +133,12 @@ export class ScoringService {
 
       for (let i = 0; i < leaderboardData.length; i++) {
         const entry = leaderboardData[i];
+        if (!entry) continue;
         
         // Check if this entry has the same score and completion time as previous
         if (previousScore !== null && 
-            entry.totalScore === previousScore && 
-            entry.completedAt?.getTime() === previousCompletionTime?.getTime()) {
+            entry.quiz_sessions.totalScore === previousScore &&
+            entry.quiz_sessions.completedAt?.getTime() === (previousCompletionTime as Date)?.getTime()) {
           // Same rank as previous entry
         } else {
           // New rank
@@ -221,20 +146,25 @@ export class ScoringService {
         }
 
         rankedEntries.push({
-          ...entry,
           rank: currentRank,
-          completedAt: entry.completedAt || new Date(),
-          averageResponseTime: entry.averageResponseTime || 0,
+          participantId: entry.participants.id,
+          participantName: entry.participants.name,
+          totalScore: entry.quiz_sessions.totalScore,
+          completedAt: entry.quiz_sessions.completedAt || new Date(),
+          lastActivityAt: entry.quiz_sessions.lastActivityAt,
+          questionsAnswered: entry.quiz_sessions.questionsAnswered,
+          correctAnswers: entry.quiz_sessions.correctAnswers,
+          averageResponseTime: 0, // Will be calculated separately
         });
 
-        previousScore = entry.totalScore;
-        previousCompletionTime = entry.completedAt;
+        previousScore = entry.quiz_sessions.totalScore;
+        previousCompletionTime = entry.quiz_sessions.completedAt;
       }
 
       return rankedEntries;
 
     } catch (error) {
-      Logger.error('Failed to get leaderboard', error as Error);
+      logger.error('Failed to get leaderboard', error as Error);
       throw new Error('Leaderboard calculation failed');
     }
   }
@@ -265,7 +195,7 @@ export class ScoringService {
       const avgRecent = recentScores.reduce((a, b) => a + b, 0) / recentScores.length;
       const lastScore = recentScores[recentScores.length - 1];
       
-      if (lastScore > avgRecent * 3) {
+      if (lastScore !== undefined && lastScore > avgRecent * 3) {
         anomalies.push('sudden_improvement');
       }
     }
@@ -285,7 +215,7 @@ export class ScoringService {
   async getCurrentStreak(sessionId: string): Promise<number> {
     try {
       const recentAnswers = await this.db
-        .select({ isCorrect: sessionQuestions.isCorrect })
+        .select()
         .from(sessionQuestions)
         .where(eq(sessionQuestions.sessionId, sessionId))
         .orderBy(desc(sessionQuestions.answeredAt))
@@ -302,7 +232,7 @@ export class ScoringService {
 
       return streak;
     } catch (error) {
-      Logger.error('Failed to get current streak', error as Error);
+      logger.error('Failed to get current streak', error as Error);
       return 0;
     }
   }
@@ -349,25 +279,170 @@ export class ScoringService {
     const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
 
     for (let i = 0; i <= str1.length; i++) {
-      matrix[0][i] = i;
+      matrix[0]![i] = i;
     }
 
     for (let j = 0; j <= str2.length; j++) {
-      matrix[j][0] = j;
+      matrix[j]![0] = j;
     }
 
     for (let j = 1; j <= str2.length; j++) {
       for (let i = 1; i <= str1.length; i++) {
         const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1, // deletion
-          matrix[j - 1][i] + 1, // insertion
-          matrix[j - 1][i - 1] + indicator // substitution
+        matrix[j]![i] = Math.min(
+          matrix[j]![i - 1]! + 1, // deletion
+          matrix[j - 1]![i]! + 1, // insertion
+          matrix[j - 1]![i - 1]! + indicator // substitution
         );
       }
     }
 
-    return matrix[str2.length][str1.length];
+    return matrix[str2.length]![str1.length]!;
+  }
+
+  /**
+   * Get leaderboard with deterministic tie-breaking
+   * @param limit Number of entries to return
+   * @returns Promise<LeaderboardEntry[]>
+   */
+  async getLeaderboard(limit: number = 10): Promise<LeaderboardEntry[]> {
+    try {
+      return await this.getLeaderboardWithTieBreaking(limit);
+    } catch (error) {
+      logger.error('Failed to get leaderboard', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate score with all bonuses
+   * @param sessionQuestionId Session question ID
+   * @param validationResult Answer validation result
+   * @param responseTime Response time in milliseconds
+   * @param timeLimitMs Time limit in milliseconds
+   * @param difficulty Question difficulty (1-5)
+   * @returns Promise<ScoreCalculationResult>
+   */
+  async calculateScore(
+    sessionQuestionId: string,
+    validationResult: AnswerValidationResult,
+    responseTime: number,
+    timeLimitMs: number,
+    difficulty: number = 1
+  ): Promise<ScoreCalculationResult> {
+    try {
+      // Get question info
+      const questionInfo = await this.getQuestionInfo(sessionQuestionId);
+      if (!questionInfo) {
+        throw new Error('Question info not found');
+      }
+
+      // Base points calculation
+      let basePoints = questionInfo.questions.basePoints;
+      
+      // Apply match type multiplier
+      switch (validationResult.matchType) {
+        case 'exact':
+          basePoints = basePoints * 1.0;
+          break;
+        case 'fuzzy':
+          basePoints = Math.floor(basePoints * 0.9);
+          break;
+        case 'partial':
+          basePoints = Math.floor(basePoints * 0.5);
+          break;
+        case 'none':
+          basePoints = 0;
+          break;
+      }
+
+      // Time bonus calculation
+      const timeBonus = this.calculateTimeBonus(basePoints, responseTime, timeLimitMs);
+      
+      // Streak multiplier
+      const currentStreak = await this.getCurrentStreak(sessionQuestionId);
+      const streakMultiplier = this.calculateStreakMultiplier(currentStreak);
+      
+      // Difficulty multiplier
+      const difficultyMultiplier = this.calculateDifficultyMultiplier(difficulty);
+      
+      // Final calculation
+      const baseWithTimeBonus = basePoints + timeBonus;
+      const withStreak = Math.floor(baseWithTimeBonus * streakMultiplier);
+      const finalScore = Math.floor(withStreak * difficultyMultiplier);
+
+      const breakdown = {
+        basePts: basePoints,
+        timeBonusPts: timeBonus,
+        streakBonusPts: withStreak - baseWithTimeBonus,
+        difficultyBonusPts: finalScore - withStreak
+      };
+
+      logger.info('Score calculated', {
+        sessionQuestionId,
+        basePoints,
+        timeBonus,
+        streakMultiplier,
+        difficultyMultiplier,
+        finalScore,
+        responseTime
+      });
+
+      return {
+        basePoints,
+        timeBonus,
+        streakMultiplier,
+        difficultyMultiplier,
+        finalScore,
+        breakdown
+      };
+    } catch (error) {
+      logger.error('Score calculation failed', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get question info for scoring
+   */
+  private async getQuestionInfo(sessionQuestionId: string) {
+    const result = await this.db
+      .select()
+      .from(sessionQuestions)
+      .innerJoin(questions, eq(sessionQuestions.questionId, questions.id))
+      .where(eq(sessionQuestions.id, sessionQuestionId))
+      .limit(1);
+
+    return result[0] || null;
+  }
+
+  /**
+   * Calculate time bonus
+   */
+  private calculateTimeBonus(basePoints: number, responseTime: number, timeLimitMs: number): number {
+    if (responseTime >= timeLimitMs) return 0;
+    const timeRatio = responseTime / timeLimitMs;
+    const bonusRatio = Math.max(0, (1 - timeRatio) * 0.5); // 0-0.5 range
+    return Math.floor(basePoints * bonusRatio);
+  }
+
+  /**
+   * Calculate streak multiplier
+   */
+  private calculateStreakMultiplier(streak: number): number {
+    if (streak < 2) return 1.0;
+    if (streak < 3) return 1.2;
+    if (streak < 4) return 1.5;
+    if (streak < 5) return 2.0;
+    return 2.5; // Max 2.5x multiplier
+  }
+
+  /**
+   * Calculate difficulty multiplier
+   */
+  private calculateDifficultyMultiplier(difficulty: number): number {
+    const multipliers = [1.0, 1.0, 1.2, 1.5, 2.0, 2.5];
+    return multipliers[difficulty] || 1.0;
   }
 }
 

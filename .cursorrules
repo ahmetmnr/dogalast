@@ -1,1 +1,74 @@
-# This is a placeholder file as requested.
+# Zero Waste Quiz - Cursor Rules
+
+## Project Context
+This is a voice-enabled quiz application about zero waste using OpenAI Realtime API, built with Bun + Hono + TypeScript + Cloudflare Workers.
+
+## Code Style
+- Use TypeScript strict mode with path aliases (@/, @api/, @services/, etc.)
+- Prefer async/await over promises
+- Use Zod for runtime validation
+- Follow functional programming patterns where possible
+- Use descriptive variable and function names in English
+- Add JSDoc comments for public APIs
+- Use environment variables from @/config/environment
+
+## File Organization
+- Use path aliases consistently across all files
+- Keep files small and focused (max 200 lines)
+- Group related functionality in modules
+- Use index.ts files for clean exports
+- Place configuration in @/config/
+- Place utilities in @/utils/
+- Place types in @/types/
+
+## Development Practices
+- Always validate environment variables using @/config/environment
+- Use type-safe database queries with Drizzle ORM
+- Implement proper error handling with try-catch
+- Add performance monitoring in development using @/utils/dev-tools
+- Use structured logging with createLogger()
+- Test all API endpoints with proper error cases
+
+## Bun Specific
+- Prefer Bun APIs over Node.js when available
+- Use Bun.build for production builds
+- Leverage Bun's fast startup for development
+- Use bun test for testing
+- Use Bun.spawn for process management
+
+## Security
+- Validate all inputs with Zod schemas
+- Use parameterized queries for database operations
+- Implement rate limiting on all public endpoints
+- Add CORS headers appropriately
+- Never log sensitive data (API keys, passwords, personal info)
+- Use bcrypt for password hashing
+- Implement JWT token validation
+
+## Performance
+- Use streaming for large responses
+- Implement caching where appropriate using KV storage
+- Monitor response times with performance middleware
+- Optimize bundle size with code splitting
+- Use lazy loading for non-critical features
+- Implement database connection pooling
+
+## Cloudflare Workers
+- Use Durable Objects for stateful operations
+- Leverage D1 database for persistent storage
+- Use KV storage for caching
+- Implement proper error handling for edge cases
+- Use environment-specific configurations
+
+## Comments
+- Add TODO comments for future improvements
+- Document complex business logic
+- Explain non-obvious code decisions
+- Keep comments up to date with code changes
+- Use JSDoc for public API documentation
+
+## Import Style
+- Use path aliases for all internal imports
+- Group imports: external libraries, internal modules, types
+- Use named imports when possible
+- Avoid default exports except for main entry points

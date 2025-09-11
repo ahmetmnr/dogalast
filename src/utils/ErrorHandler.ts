@@ -8,7 +8,7 @@ import { HTTPException } from 'hono/http-exception';
 
 import { Logger } from './logger';
 
-import type { ApiError, ApiResponse } from '@/types/api';
+import type { ApiResponse } from '@/types/api';
 
 /**
  * Error codes enum
@@ -30,6 +30,8 @@ export enum ErrorCode {
   MISSING_AUTH_HEADER = 'MISSING_AUTH_HEADER',
   INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
   SESSION_EXPIRED = 'SESSION_EXPIRED',
+  TOKEN_REFRESH_FAILED = 'TOKEN_REFRESH_FAILED',
+  SESSION_RESUME_FAILED = 'SESSION_RESUME_FAILED',
   
   // Business logic errors
   QUIZ_NOT_STARTED = 'QUIZ_NOT_STARTED',
@@ -88,6 +90,8 @@ export class ErrorHandler {
     [ErrorCode.INVALID_TOKEN]: 401,
     [ErrorCode.MISSING_AUTH_HEADER]: 401,
     [ErrorCode.SESSION_EXPIRED]: 401,
+    [ErrorCode.TOKEN_REFRESH_FAILED]: 401,
+    [ErrorCode.SESSION_RESUME_FAILED]: 401,
     
     // 403 Forbidden
     [ErrorCode.FORBIDDEN]: 403,
@@ -151,6 +155,8 @@ export class ErrorHandler {
     [ErrorCode.MISSING_AUTH_HEADER]: 'Kimlik doğrulama bilgisi eksik',
     [ErrorCode.INSUFFICIENT_PERMISSIONS]: 'Yetersiz yetki',
     [ErrorCode.SESSION_EXPIRED]: 'Oturum süresi doldu',
+    [ErrorCode.TOKEN_REFRESH_FAILED]: 'Token yenileme başarısız',
+    [ErrorCode.SESSION_RESUME_FAILED]: 'Oturum devam ettirilemedi',
     
     // Business logic
     [ErrorCode.QUIZ_NOT_STARTED]: 'Yarışma henüz başlamadı',
@@ -196,7 +202,7 @@ export class ErrorHandler {
           requestId,
         },
         timestamp,
-      }, error.statusCode);
+      }, error.statusCode as any);
     }
     
     // Handle Hono HTTP exceptions
@@ -290,7 +296,7 @@ export class ErrorHandler {
       timestamp,
     };
     
-    return c.json(errorResponse, finalStatusCode);
+    return c.json(errorResponse, finalStatusCode as any);
   }
   
   /**
@@ -309,7 +315,7 @@ export class ErrorHandler {
       timestamp,
     };
     
-    return c.json(successResponse, statusCode);
+    return c.json(successResponse, statusCode as any);
   }
   
   /**

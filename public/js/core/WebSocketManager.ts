@@ -3,7 +3,7 @@
  * Real-time communication with backend for leaderboard updates and quiz events
  */
 
-import { apiClient } from './ApiClient.ts';
+import { apiClient } from './ApiClient';
 
 // ============================================================================
 // Types and Interfaces
@@ -178,7 +178,8 @@ export class WebSocketManager {
 
         this.ws.send(JSON.stringify(wsMessage));
 
-        if (__DEV__) {
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        if (isDevelopment) {
           console.log('WebSocket message sent:', wsMessage.type);
         }
 
@@ -307,7 +308,7 @@ export class WebSocketManager {
         resolve();
       };
 
-      const onError = (error: Event) => {
+      const onError = () => {
         clearTimeout(timeout);
         this.ws!.removeEventListener('open', onOpen);
         this.ws!.removeEventListener('error', onError);
@@ -326,14 +327,15 @@ export class WebSocketManager {
     try {
       const message: WebSocketMessage = JSON.parse(event.data);
 
-      if (__DEV__) {
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      if (isDevelopment) {
         console.log('WebSocket message received:', message.type);
       }
 
       // Handle system messages
       switch (message.type) {
         case 'heartbeat':
-          this.handleHeartbeat(message);
+          this.handleHeartbeat();
           break;
 
         case 'heartbeat_response':
@@ -369,7 +371,7 @@ export class WebSocketManager {
   /**
    * Handle heartbeat message from server
    */
-  private handleHeartbeat(message: WebSocketMessage): void {
+  private handleHeartbeat(): void {
     // Send heartbeat response
     this.send({
       type: 'heartbeat_response',

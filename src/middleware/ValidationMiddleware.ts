@@ -291,7 +291,9 @@ export class InputSanitizer {
     // Remove dots from gmail addresses (before @)
     if (email.includes('@gmail.com')) {
       const [localPart, domain] = email.split('@');
-      email = localPart.replace(/\./g, '') + '@' + domain;
+      if (localPart) {
+        email = localPart.replace(/\./g, '') + '@' + domain;
+      }
     }
     
     // Remove + aliases
@@ -501,7 +503,7 @@ export class ValidationMiddleware extends BaseMiddleware {
     }));
   }
   
-  async handle(c: Context, next: Next): Promise<void> {
+  async handle(_c: Context, next: Next): Promise<void> {
     // This can be used for global validation if needed
     await next();
   }

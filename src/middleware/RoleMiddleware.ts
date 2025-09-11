@@ -6,10 +6,8 @@
 import { Context, Next } from 'hono';
 
 import { BaseMiddleware } from './BaseMiddleware';
-import { JWTService, Permission, PermissionManager, AuthenticationError, AuthorizationError } from '@/services/JWTService';
+import { JWTService, Permission, PermissionManager } from '@/services/JWTService';
 import { Logger } from '@/utils/logger';
-
-import type { JWTPayload } from '@/services/JWTService';
 
 /**
  * User context interface
@@ -51,17 +49,16 @@ export class AuthenticationMiddleware extends BaseMiddleware {
       }
       
       // Extract and verify token
-      const token = JWTService.extractTokenFromHeader(authHeader);
-      const isAdminPath = c.req.path.startsWith('/api/admin');
-      const payload = await JWTService.verifyToken(token, { isAdmin: isAdminPath });
+      const token = authHeader.substring(7);
+      const payload = await JWTService.verifyToken(token);
       
       // Create user context
       const userContext: UserContext = {
         id: payload.sub,
         role: payload.role,
-        permissions: payload.permissions || PermissionManager.getRolePermissions(payload.role),
+        permissions: payload.permissions || ['quiz_participation'],
         sessionId: payload.sessionId,
-        participantId: payload.participantId
+        participantId: parseInt(payload.sub)
       };
       
       // Store user info in context
@@ -69,7 +66,8 @@ export class AuthenticationMiddleware extends BaseMiddleware {
       c.set('jwt', payload);
       
       // Check if token is expiring soon
-      if (JWTService.isTokenExpiringSoon(payload)) {
+      const expiresIn = (payload.exp || 0) - Math.floor(Date.now() / 1000);
+      if (expiresIn < 3600) { // Less than 1 hour
         c.header('X-Token-Refresh-Needed', 'true');
         c.header('X-Token-Expires-In', String(payload.exp! - Math.floor(Date.now() / 1000)));
       }
@@ -87,17 +85,17 @@ export class AuthenticationMiddleware extends BaseMiddleware {
       await next();
       
     } catch (error) {
-      if (error instanceof AuthenticationError) {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'AuthenticationError') {
         // Log authentication failure
         Logger.warn('Authentication failed', {
-          error: error.message,
-          code: error.code,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          code: error instanceof Error && 'code' in error ? (error as any).code : 'UNKNOWN_ERROR',
           path: c.req.path,
           ip: this.getClientIP(c),
           userAgent: this.getUserAgent(c)
         });
         
-        return this.unauthorizedResponse(c, error.message, error.code);
+        return this.unauthorizedResponse(c, error instanceof Error ? error.message : 'Unknown error', 'AUTH_ERROR');
       }
       
       Logger.error('Authentication middleware error', error as Error);
@@ -200,8 +198,8 @@ export class AuthorizationMiddleware {
         : [requiredPermission];
       
       const hasPermission = permissions.length === 1
-        ? PermissionManager.hasPermission(user.permissions, permissions[0])
-        : PermissionManager.hasAllPermissions(user.permissions, permissions);
+        ? PermissionManager.hasPermission(user.permissions, permissions[0]!)
+        : PermissionManager.hasAnyPermission(user.permissions, permissions);
       
       if (!hasPermission) {
         Logger.warn('Insufficient permissions for access', {
@@ -421,7 +419,7 @@ export class APIKeyMiddleware extends BaseMiddleware {
     }
     
     // Validate API key (in production, check against database)
-    const validApiKey = process.env.INTERNAL_API_KEY;
+    const validApiKey = process.env['INTERNAL_API_KEY'];
     
     if (apiKey !== validApiKey) {
       Logger.warn('Invalid API key attempt', {

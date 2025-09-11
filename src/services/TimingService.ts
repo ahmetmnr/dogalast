@@ -3,7 +3,7 @@
  * Manages all timing events to ensure fair and cheat-proof scoring
  */
 
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { 
   questionTimings, 
@@ -12,7 +12,6 @@ import {
   questions 
 } from '@/db/schema';
 import { Logger } from '@/utils/logger';
-import { db as dbHelpers } from '@/db/connection';
 
 import type { DatabaseInstance } from '@/db/connection';
 
@@ -59,7 +58,7 @@ export class TimingService {
    */
   async markTimingEvent(event: TimingEvent): Promise<string> {
     const serverTimestamp = this.getMonotonicTime();
-    const eventId = dbHelpers.generateId();
+    const eventId = crypto.randomUUID();
 
     try {
       const networkLatency = event.clientSignalTimestamp
@@ -178,7 +177,7 @@ export class TimingService {
   async calculateTimerStart(sessionQuestionId: string): Promise<number | null> {
     try {
       const result = await this.db
-        .select({ serverTimestamp: questionTimings.serverTimestamp })
+        .select()
         .from(questionTimings)
         .where(
           and(
@@ -201,10 +200,7 @@ export class TimingService {
   async calculateResponseTime(sessionQuestionId: string): Promise<number | null> {
     try {
       const events = await this.db
-        .select({
-          eventType: questionTimings.eventType,
-          serverTimestamp: questionTimings.serverTimestamp,
-        })
+        .select()
         .from(questionTimings)
         .where(
           and(
@@ -326,13 +322,13 @@ export class TimingService {
   private async getQuestionTimeLimit(sessionQuestionId: string): Promise<number> {
     try {
       const result = await this.db
-        .select({ timeLimit: questions.timeLimit })
+        .select()
         .from(sessionQuestions)
         .innerJoin(questions, eq(sessionQuestions.questionId, questions.id))
         .where(eq(sessionQuestions.id, sessionQuestionId))
         .limit(1);
 
-      return result[0]?.timeLimit || 30;
+      return result[0]?.questions?.timeLimit || 30;
     } catch (error) {
       Logger.error('Failed to get question time limit', error as Error);
       return 30;

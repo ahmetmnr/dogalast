@@ -74,6 +74,15 @@ export function validateEnvironment(env: Record<string, string | undefined>): En
   }
 }
 
+// Load .env.local file if exists (for local development)
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    require('dotenv').config({ path: '.env.local' });
+  } catch (e) {
+    // dotenv not available, continue without it
+  }
+}
+
 // Global environment instance
 export const env = validateEnvironment(process.env)
 

@@ -3,10 +3,10 @@
  * Integrates audio, realtime, and quiz functionality
  */
 
-import { AudioManager, AudioUtils, type AudioEvent } from '../core/AudioManager.ts';
-import { RealtimeClient, type RealtimeConfig, type ConnectionState } from '../core/RealtimeClient.ts';
-import { webSocketManager, WebSocketEventHelper } from '../core/WebSocketManager.ts';
-import { api, apiClient } from '../core/ApiClient.ts';
+import { AudioManager, AudioUtils, type AudioEvent } from '../core/AudioManager';
+import { RealtimeClient, type RealtimeConfig, type ConnectionState } from '../core/RealtimeClient';
+import { WebSocketEventHelper } from '../core/WebSocketManager';
+import { api, apiClient } from '../core/ApiClient';
 
 // ============================================================================
 // Types
@@ -335,7 +335,7 @@ export class QuizInterface {
     });
 
     // Speech end detection
-    this.audioManager.addEventListener('speechEnd', (event: AudioEvent) => {
+    this.audioManager.addEventListener('speechEnd', () => {
       console.log('Speech ended detected');
       
       // Commit audio to OpenAI for processing
@@ -482,7 +482,7 @@ export class QuizInterface {
       console.error('Failed to proceed to next question:', error);
       
       // If it's "all questions completed" error, finish quiz
-      if (error.code === 'ALL_QUESTIONS_COMPLETED') {
+      if (error instanceof Error && error.message === 'ALL_QUESTIONS_COMPLETED') {
         await this.finishQuiz();
       } else {
         this.handleError(error);
@@ -772,14 +772,15 @@ export class QuizInterface {
    * Show calibration result
    */
   private showCalibrationResult(result: any): void {
-    const qualityMessages = {
-      excellent: 'Mükemmel ses kalitesi!',
-      good: 'İyi ses kalitesi',
-      fair: 'Orta ses kalitesi',
-      poor: 'Düşük ses kalitesi - gürültülü ortam tespit edildi'
-    };
 
-    const message = qualityMessages[result.calibrationQuality] || 'Kalibrasyon tamamlandı';
+    const calibrationMessages = {
+      excellent: 'Mükemmel kalite',
+      good: 'İyi kalite',
+      fair: 'Orta kalite',
+      poor: 'Düşük kalite'
+    } as const;
+
+    const message = calibrationMessages[result.calibrationQuality as keyof typeof calibrationMessages] || 'Kalibrasyon tamamlandı';
     const type = result.calibrationQuality === 'poor' ? 'warning' : 'info';
     
     this.showMessage(message, type);

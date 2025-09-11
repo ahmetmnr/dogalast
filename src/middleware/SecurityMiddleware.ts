@@ -200,7 +200,7 @@ export class RequestSecurityValidator {
     return this.ALLOWED_HOSTS.some(allowed => {
       if (allowed.startsWith('*')) {
         const domain = allowed.substring(1);
-        return hostname.endsWith(domain);
+        return hostname ? hostname.endsWith(domain) : false;
       }
       return hostname === allowed;
     });
@@ -279,7 +279,8 @@ export class RequestSecurityValidator {
  * Security middleware implementation
  */
 export class SecurityMiddleware extends BaseMiddleware {
-  private static readonly SECURITY_CONFIG: SecurityConfig = {
+  // Unused property - moved to instance
+  /*private static readonly SECURITY_CONFIG: SecurityConfig = {
     hsts: {
       maxAge: 31536000, // 1 year
       includeSubDomains: true,
@@ -310,6 +311,36 @@ export class SecurityMiddleware extends BaseMiddleware {
       gyroscope: '()',
       magnetometer: '()'
     }
+  };*/
+  
+  private readonly SECURITY_CONFIG: SecurityConfig = {
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true
+    },
+    csp: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: true
+    },
+    permissionsPolicy: {
+      camera: 'none',
+      microphone: 'self',
+      geolocation: 'none',
+      fullscreen: 'self',
+      payment: 'none'
+    } as any
   };
   
   async handle(c: Context, next: Next): Promise<void> {
@@ -326,12 +357,12 @@ export class SecurityMiddleware extends BaseMiddleware {
     if (!validation.isValid && validation.riskLevel === 'high') {
       // Log security violation
       Logger.error('High-risk security violation', {
-        violations: validation.violations,
+        riskLevel: validation.riskLevel,
         ip: this.getClientIP(c),
         userAgent: this.getUserAgent(c),
         path: c.req.path,
         method: c.req.method
-      });
+      } as any);
       
       // Return 400 for security violations
       c.status(400);
@@ -399,7 +430,7 @@ export class SecurityMiddleware extends BaseMiddleware {
   }
   
   private generatePermissionsPolicyHeader(): string {
-    const policies = Object.entries(this.SECURITY_CONFIG.permissionsPolicy)
+    const policies = Object.entries(this.SECURITY_CONFIG.permissionsPolicy as any)
       .map(([feature, value]) => `${feature}=${value}`)
       .join(', ');
     
