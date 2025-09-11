@@ -15,6 +15,9 @@ import {
 import { TimingService } from './TimingService';
 import { ScoringService } from './ScoringService';
 import { PrivacyService } from './PrivacyService';
+import { KnowledgeService } from './KnowledgeService';
+import { TokenService } from './TokenService';
+import { ConnectionRecoveryService } from './ConnectionRecoveryService';
 import { Logger } from '@/utils/logger';
 import { db as dbHelpers } from '@/db/connection';
 
@@ -69,6 +72,8 @@ export class SecureToolHandler {
   private timingService: TimingService;
   private scoringService: ScoringService;
   private privacyService: PrivacyService;
+  private knowledgeService: KnowledgeService;
+  private connectionRecoveryService: ConnectionRecoveryService;
   private idempotencyCache = new Map<string, IdempotencyRecord>();
   private logger: Logger;
 
@@ -78,6 +83,8 @@ export class SecureToolHandler {
     this.timingService = new TimingService(db);
     this.scoringService = new ScoringService(db);
     this.privacyService = new PrivacyService(db);
+    this.knowledgeService = new KnowledgeService(db);
+    this.connectionRecoveryService = new ConnectionRecoveryService(db);
     this.logger = new Logger('SecureToolHandler');
   }
 
@@ -517,32 +524,42 @@ export class SecureToolHandler {
    * Info Lookup Tool Implementation
    */
   private async executeInfoLookup(args: { query: string }): Promise<any> {
-    // Simple knowledge search (placeholder - would use FTS in production)
-    const searchQuery = args.query.toLowerCase();
-    
-    // Privacy compliance
-    await this.privacyService.logDataProcessing(
-      parseInt(this.user.id),
-      'data_export',
-      ['usage_data'],
-      'Bilgi bankası sorgusu'
-    );
+    try {
+      // Use KnowledgeService for intelligent search
+      const searchResult = await this.knowledgeService.handleInfoQuery(args.query);
+      
+      // Privacy compliance - log the search
+      await this.privacyService.logDataProcessing(
+        parseInt(this.user.id),
+        'data_export',
+        ['usage_data'],
+        'Bilgi bankası sorgusu'
+      );
 
-    // Mock search results for now
-    const mockResults = [
-      {
-        id: 1,
-        title: 'Sıfır Atık Hakkında',
-        content: 'Sıfır atık yaşam tarzı hakkında bilgi...',
-        relevanceScore: 0.9,
-      }
-    ];
+      return {
+        query: args.query,
+        results: searchResult.results,
+        resultCount: searchResult.results.length,
+        responseText: searchResult.responseText,
+        intent: searchResult.intent,
+        success: true
+      };
 
-    return {
-      query: args.query,
-      results: mockResults,
-      resultCount: mockResults.length,
-    };
+    } catch (error) {
+      Logger.error('Info lookup execution failed', error as Error, {
+        query: args.query,
+        userId: this.user.id
+      });
+
+      return {
+        query: args.query,
+        results: [],
+        resultCount: 0,
+        responseText: 'Bilgi arama sırasında hata oluştu. Lütfen tekrar deneyin.',
+        success: false,
+        error: error.message
+      };
+    }
   }
 
   /**

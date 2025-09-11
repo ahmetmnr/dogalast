@@ -27,6 +27,9 @@ import { setupAdminRoutes } from '@/routes/admin';
 import { Environment } from '@/utils/environment';
 import { globalErrorHandler } from '@/utils/ErrorHandler';
 
+// Services
+import { TokenService } from '@/services/TokenService';
+
 // Environment interface
 export interface Env {
   // Database bindings
@@ -70,9 +73,15 @@ const app = new Hono<{ Bindings: Env }>();
 // Set global error handler
 app.onError(globalErrorHandler);
 
-// Initialize environment on first request
+// Initialize environment and services on first request
 app.use('*', async (c, next) => {
   Environment.init(c.env);
+  
+  // Initialize TokenService once
+  if (!TokenService.isInitialized) {
+    TokenService.initialize();
+  }
+  
   await next();
 });
 

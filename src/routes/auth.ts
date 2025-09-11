@@ -15,6 +15,8 @@ import {
 } from '@/db/schema';
 import { JWTService, Permission, PermissionManager } from '@/services/JWTService';
 import { ValidationMiddleware, schemas } from '@/middleware/ValidationMiddleware';
+import { TokenService } from '@/services/TokenService';
+import { ConnectionRecoveryService } from '@/services/ConnectionRecoveryService';
 import { rateLimitMiddleware } from '@/middleware/RateLimitMiddleware';
 import { authenticationMiddleware } from '@/middleware/RoleMiddleware';
 import { InputSanitizer } from '@/middleware/ValidationMiddleware';
@@ -281,11 +283,11 @@ export function setupAuthRoutes(app: Hono<{ Bindings: Env }>) {
           );
         }
 
-        // Generate ephemeral token (5 minutes for OpenAI)
-        const ephemeralToken = await JWTService.generateEphemeralToken(
+        // Generate ephemeral token using TokenService
+        const ephemeralToken = await TokenService.generateEphemeralToken(
           sessionId,
-          user.id,
-          300 // 5 minutes
+          parseInt(user.id),
+          ['realtime_audio', 'tool_dispatch']
         );
 
         Logger.info('Ephemeral token generated', {
@@ -342,12 +344,21 @@ export function setupAuthRoutes(app: Hono<{ Bindings: Env }>) {
           );
         }
 
-        // Generate new ephemeral token
-        const newToken = await JWTService.generateEphemeralToken(
-          sessionId,
-          user.id,
-          300 // 5 minutes
+        // Generate new ephemeral token using TokenService
+        const refreshResult = await TokenService.refreshEphemeralToken(
+          c.req.header('Authorization')?.replace('Bearer ', '') || '',
+          sessionId
         );
+        
+        if (!refreshResult.newToken) {
+          return ErrorHandler.createErrorResponse(
+            c,
+            ErrorCode.TOKEN_REFRESH_FAILED,
+            refreshResult.error || 'Token yenilenemedi'
+          );
+        }
+        
+        const newToken = refreshResult.newToken;
 
         Logger.info('Token refreshed', {
           userId: user.id,
@@ -384,16 +395,28 @@ export function setupAuthRoutes(app: Hono<{ Bindings: Env }>) {
         const { sessionId, lastEventId } = c.get('validatedBody') as SessionResumeRequest;
         const db = c.get('db') as DatabaseInstance;
 
-        // Get session state
-        const sessionState = await getSessionState(db, sessionId, parseInt(user.id));
+        // Initialize ConnectionRecoveryService
+        const recoveryService = new ConnectionRecoveryService(db);
 
-        if (!sessionState) {
+        // Attempt session recovery
+        const recoveryResult = await recoveryService.attemptReconnection(
+          sessionId,
+          parseInt(user.id)
+        );
+
+        if (!recoveryResult.success) {
           return ErrorHandler.createErrorResponse(
             c,
-            ErrorCode.NOT_FOUND,
-            'Session bulunamadı'
+            ErrorCode.SESSION_RESUME_FAILED,
+            recoveryResult.error || 'Session devam ettirilemedi',
+            {
+              canResume: recoveryResult.canResume,
+              suggestedAction: recoveryResult.suggestedAction
+            }
           );
         }
+
+        const sessionState = recoveryResult.sessionState!;
 
         Logger.info('Session resumed', {
           userId: user.id,
