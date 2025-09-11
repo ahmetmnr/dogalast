@@ -8,6 +8,9 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 
+// Configuration imports
+import { env, createLogger, isDevelopment } from '@/config/environment';
+
 // Type imports
 import type { ApiResponse } from '@/types/api';
 import type { D1Database } from '@cloudflare/workers-types';
@@ -24,7 +27,6 @@ import { setupQuizRoutes } from '@/routes/quiz';
 import { setupAdminRoutes } from '@/routes/admin';
 
 // Utils
-import { Environment } from '@/utils/environment';
 import { globalErrorHandler } from '@/utils/ErrorHandler';
 
 // Services
@@ -73,10 +75,8 @@ const app = new Hono<{ Bindings: Env }>();
 // Set global error handler
 app.onError(globalErrorHandler);
 
-// Initialize environment and services on first request
+// Initialize services on first request
 app.use('*', async (c, next) => {
-  Environment.init(c.env);
-  
   // Initialize TokenService once
   if (!TokenService.isInitialized) {
     TokenService.initialize();

@@ -55,6 +55,7 @@
       "@types/*": ["./src/types/*"],
       "@db/*": ["./src/db/*"],
       "@utils/*": ["./src/utils/*"],
+      "@config/*": ["./src/config/*"],
       "@components/*": ["./public/js/components/*"],
       "@core/*": ["./public/js/core/*"]
     },
