@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Components Test - Sıfır Atık Yarışması</title>
+    <link rel="stylesheet" href="/css/main.css">
+    <style>
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--space-6);
+        }
+        
+        .test-section {
+            margin-bottom: var(--space-12);
+            padding: var(--space-6);
+            border: 1px solid var(--color-outline);
+            border-radius: var(--radius-xl);
+        }
+        
+        .test-title {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-6);
+            color: var(--color-primary-600);
+        }
+        
+        .test-controls {
+            display: flex;
+            gap: var(--space-3);
+            margin-bottom: var(--space-6);
+            flex-wrap: wrap;
+        }
+        
+        .component-container {
+            border: 1px dashed var(--color-gray-300);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 UI Components Test Page</h1>
+        <p>Bu sayfa UI bileşenlerini test etmek için oluşturulmuştur.</p>
+
+        <!-- Timer Test -->
+        <section class="test-section">
+            <h2 class="test-title">⏰ Timer Component</h2>
+            <div class="test-controls">
+                <button class="btn btn-primary" onclick="testTimer(30)">30 Saniye</button>
+                <button class="btn btn-primary" onclick="testTimer(10)">10 Saniye</button>
+                <button class="btn btn-outline" onclick="pauseTimer()">Duraklat</button>
+                <button class="btn btn-outline" onclick="resumeTimer()">Devam Et</button>
+                <button class="btn btn-secondary" onclick="stopTimer()">Durdur</button>
+            </div>
+            <div id="timer-test" class="component-container"></div>
+        </section>
+
+        <!-- Question Display Test -->
+        <section class="test-section">
+            <h2 class="test-title">❓ Question Display Component</h2>
+            <div class="test-controls">
+                <button class="btn btn-primary" onclick="showTestQuestion()">Test Sorusu Göster</button>
+                <button class="btn btn-primary" onclick="showMultipleChoiceQuestion()">Çoktan Seçmeli</button>
+                <button class="btn btn-outline" onclick="showQuestionLoading()">Yükleniyor</button>
+                <button class="btn btn-secondary" onclick="showQuestionEmpty()">Boş</button>
+            </div>
+            <div id="question-test" class="component-container"></div>
+        </section>
+
+        <!-- Score Display Test -->
+        <section class="test-section">
+            <h2 class="test-title">🏆 Score Display Component</h2>
+            <div class="test-controls">
+                <button class="btn btn-primary" onclick="addScore(10)">+10 Puan</button>
+                <button class="btn btn-primary" onclick="addScore(25)">+25 Puan</button>
+                <button class="btn btn-success" onclick="showCorrectAnswer()">Doğru Cevap</button>
+                <button class="btn btn-error" onclick="showWrongAnswer()">Yanlış Cevap</button>
+                <button class="btn btn-outline" onclick="resetScore()">Sıfırla</button>
+            </div>
+            <div id="score-test" class="component-container"></div>
+        </section>
+
+        <!-- Leaderboard Test -->
+        <section class="test-section">
+            <h2 class="test-title">🏅 Leaderboard Component</h2>
+            <div class="test-controls">
+                <button class="btn btn-primary" onclick="loadTestLeaderboard()">Test Verisi Yükle</button>
+                <button class="btn btn-outline" onclick="simulateLeaderboardUpdate()">Güncelleme Simüle Et</button>
+                <button class="btn btn-outline" onclick="highlightUser()">Kullanıcı Vurgula</button>
+                <button class="btn btn-secondary" onclick="clearLeaderboard()">Temizle</button>
+            </div>
+            <div id="leaderboard-test" class="component-container"></div>
+        </section>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="/js/components/Timer.js"></script>
+    <script type="module" src="/js/components/QuestionDisplay.js"></script>
+    <script type="module" src="/js/components/ScoreDisplay.js"></script>
+    <script type="module" src="/js/components/Leaderboard.js"></script>
+    
+    <script type="module">
+        import Timer from '/js/components/Timer.js';
+        import { QuestionDisplay } from '/js/components/QuestionDisplay.js';
+        import ScoreDisplay from '/js/components/ScoreDisplay.js';
+        import Leaderboard from '/js/components/Leaderboard.js';
+
+        // Global component instances
+        let timer, questionDisplay, scoreDisplay, leaderboard;
+        let currentScore = 0;
+
+        // Initialize components
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Timer
+            timer = new Timer('timer-test', {
+                onTimeUp: () => {
+                    console.log('Timer finished!');
+                    alert('Süre doldu!');
+                },
+                onTimeWarning: (remainingTime) => {
+                    console.log(`Time warning: ${remainingTime} seconds`);
+                }
+            });
+
+            // Initialize Question Display
+            questionDisplay = new QuestionDisplay('question-test');
+
+            // Initialize Score Display
+            scoreDisplay = new ScoreDisplay('score-test', {
+                showBreakdown: true
+            });
+
+            // Initialize Leaderboard
+            leaderboard = new Leaderboard('leaderboard-test', {
+                pageSize: 10,
+                autoRefresh: false, // Disable for testing
+                showFullStats: true
+            });
+
+            console.log('All components initialized');
+        });
+
+        // Timer test functions
+        window.testTimer = (seconds) => {
+            timer.start(seconds);
+        };
+
+        window.pauseTimer = () => {
+            timer.pause();
+        };
+
+        window.resumeTimer = () => {
+            timer.resume();
+        };
+
+        window.stopTimer = () => {
+            timer.stop();
+        };
+
+        // Question display test functions
+        window.showTestQuestion = () => {
+            const testQuestion = {
+                sessionQuestionId: 'test-sq-1',
+                questionId: 'q001',
+                text: 'Sıfır atık yaşam tarzının temel prensibi nedir?',
+                difficulty: 3,
+                timeLimit: 30,
+                basePoints: 15
+            };
+
+            const testSession = {
+                questionIndex: 0,
+                totalQuestions: 10
+            };
+
+            questionDisplay.update(testQuestion, testSession);
+        };
+
+        window.showMultipleChoiceQuestion = () => {
+            const testQuestion = {
+                sessionQuestionId: 'test-sq-2',
+                questionId: 'q002',
+                text: 'Kompost yapımında hangi malzemeler kullanılmamalıdır?',
+                options: [
+                    'Meyve ve sebze kabukları',
+                    'Kahve telvesi',
+                    'Et artıkları ve süt ürünleri',
+                    'Kuru yapraklar'
+                ],
+                difficulty: 2,
+                timeLimit: 25,
+                basePoints: 12
+            };
+
+            const testSession = {
+                questionIndex: 1,
+                totalQuestions: 10
+            };
+
+            questionDisplay.update(testQuestion, testSession);
+        };
+
+        window.showQuestionLoading = () => {
+            questionDisplay.showLoading('Test yükleniyor...');
+        };
+
+        window.showQuestionEmpty = () => {
+            questionDisplay.showEmpty();
+        };
+
+        // Score display test functions
+        window.addScore = (points) => {
+            currentScore += points;
+            const testSession = {
+                totalScore: currentScore,
+                questionIndex: Math.floor(currentScore / 15),
+                totalQuestions: 10
+            };
+            scoreDisplay.updateScore(testSession);
+        };
+
+        window.showCorrectAnswer = () => {
+            const testAnswer = {
+                isCorrect: true,
+                earnedPoints: 20,
+                matchType: 'exact',
+                similarity: 1.0,
+                responseTime: 3500,
+                scoreBreakdown: {
+                    basePts: 15,
+                    timeBonusPts: 3,
+                    streakBonusPts: 2,
+                    difficultyBonusPts: 0
+                },
+                correctAnswer: 'Reddet, Azalt, Yeniden Kullan, Geri Dönüştür, Çürüt'
+            };
+
+            scoreDisplay.showAnswerFeedback(testAnswer);
+        };
+
+        window.showWrongAnswer = () => {
+            const testAnswer = {
+                isCorrect: false,
+                earnedPoints: 0,
+                matchType: 'none',
+                similarity: 0.2,
+                responseTime: 8500,
+                scoreBreakdown: {
+                    basePts: 0,
+                    timeBonusPts: 0,
+                    streakBonusPts: 0,
+                    difficultyBonusPts: 0
+                },
+                correctAnswer: 'Doğru cevap burada olacak'
+            };
+
+            scoreDisplay.showAnswerFeedback(testAnswer);
+        };
+
+        window.resetScore = () => {
+            currentScore = 0;
+            const testSession = {
+                totalScore: 0,
+                questionIndex: 0,
+                totalQuestions: 10
+            };
+            scoreDisplay.updateScore(testSession);
+        };
+
+        // Leaderboard test functions
+        window.loadTestLeaderboard = () => {
+            const testData = [
+                { rank: 1, participantId: 1, name: 'Ahmet Yılmaz', score: 180, completedAt: new Date(Date.now() - 300000), avgResponseTime: 4.2 },
+                { rank: 2, participantId: 2, name: 'Ayşe Kaya', score: 165, completedAt: new Date(Date.now() - 600000), avgResponseTime: 5.1 },
+                { rank: 3, participantId: 3, name: 'Mehmet Öz', score: 150, completedAt: new Date(Date.now() - 900000), avgResponseTime: 6.3 },
+                { rank: 4, participantId: 4, name: 'Fatma Demir', score: 135, completedAt: new Date(Date.now() - 1200000), avgResponseTime: 4.8 },
+                { rank: 5, participantId: 5, name: 'Ali Çelik', score: 120, completedAt: new Date(Date.now() - 1500000), avgResponseTime: 7.2 }
+            ];
+
+            // Simulate API response
+            leaderboard.entries = testData;
+            leaderboard.totalEntries = testData.length;
+            leaderboard.hasMore = false;
+            leaderboard.renderEntries();
+        };
+
+        window.simulateLeaderboardUpdate = () => {
+            const updateData = {
+                updatedEntry: {
+                    rank: 2,
+                    participantId: 6,
+                    name: 'Zeynep Arslan',
+                    score: 170,
+                    completedAt: new Date(),
+                    avgResponseTime: 3.8
+                }
+            };
+
+            leaderboard.handleLeaderboardUpdate(updateData);
+        };
+
+        window.highlightUser = () => {
+            leaderboard.highlightUserEntry(3); // Highlight Mehmet Öz
+        };
+
+        window.clearLeaderboard = () => {
+            leaderboard.entries = [];
+            leaderboard.renderEntries();
+        };
+    </script>
+</body>
+</html>

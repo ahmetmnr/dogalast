@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel Test - Sıfır Atık Yarışması</title>
+    <link rel="stylesheet" href="/css/main.css">
+    <style>
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--space-6);
+        }
+        
+        .test-section {
+            margin-bottom: var(--space-12);
+            padding: var(--space-6);
+            border: 1px solid var(--color-outline);
+            border-radius: var(--radius-xl);
+        }
+        
+        .test-title {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-6);
+            color: var(--color-primary-600);
+        }
+        
+        .test-controls {
+            display: flex;
+            gap: var(--space-3);
+            margin-bottom: var(--space-6);
+            flex-wrap: wrap;
+        }
+        
+        .component-container {
+            border: 1px dashed var(--color-gray-300);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            min-height: 400px;
+        }
+
+        .mock-data-info {
+            background: var(--color-info-surface);
+            border: 1px solid var(--color-info);
+            color: var(--color-info-text);
+            padding: var(--space-4);
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--space-6);
+            font-size: var(--font-size-sm);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🛡️ Admin Panel Test Page</h1>
+        <p>Bu sayfa admin panel bileşenlerini test etmek için oluşturulmuştur.</p>
+
+        <div class="mock-data-info">
+            <strong>📝 Test Notları:</strong><br>
+            • Mock API responses kullanılmaktadır<br>
+            • Admin token: localStorage'da 'admin_token' olarak saklanır<br>
+            • Test için <code>window.setMockAdminUser()</code> fonksiyonunu kullanın
+        </div>
+
+        <!-- Admin Dashboard Test -->
+        <section class="test-section">
+            <h2 class="test-title">🏠 Admin Dashboard Component</h2>
+            <div class="test-controls">
+                <button class="btn btn-primary" onclick="loadTestDashboard()">Dashboard Yükle</button>
+                <button class="btn btn-outline" onclick="simulateStatsUpdate()">İstatistik Güncelle</button>
+                <button class="btn btn-outline" onclick="showSystemAlert()">Sistem Uyarısı</button>
+                <button class="btn btn-secondary" onclick="clearDashboard()">Temizle</button>
+            </div>
+            <div id="dashboard-test" class="component-container"></div>
+        </section>
+
+        <!-- Question Management Test -->
+        <section class="test-section">
+            <h2 class="test-title">❓ Question Management Component</h2>
+            <div class="test-controls">
+                <button class="btn btn-primary" onclick="loadTestQuestions()">Soru Listesi Yükle</button>
+                <button class="btn btn-outline" onclick="selectRandomQuestions()">Rastgele Seç</button>
+                <button class="btn btn-outline" onclick="testFilters()">Filtre Test</button>
+                <button class="btn btn-secondary" onclick="clearQuestions()">Temizle</button>
+            </div>
+            <div id="questions-test" class="component-container"></div>
+        </section>
+
+        <!-- Admin Navigation Test -->
+        <section class="test-section">
+            <h2 class="test-title">🧭 Admin Navigation Test</h2>
+            <div class="test-controls">
+                <button class="btn btn-primary" onclick="openAdminPanel()">Admin Panel Aç</button>
+                <button class="btn btn-outline" onclick="openAdminLogin()">Admin Login Aç</button>
+                <button class="btn btn-outline" onclick="setMockAdminUser()">Mock Admin Ayarla</button>
+                <button class="btn btn-secondary" onclick="clearAdminAuth()">Auth Temizle</button>
+            </div>
+            <div class="test-info">
+                <h4>🔐 Test Admin Bilgileri:</h4>
+                <ul>
+                    <li><strong>Kullanıcı Adı:</strong> admin</li>
+                    <li><strong>Şifre:</strong> admin123</li>
+                    <li><strong>Role:</strong> super_admin</li>
+                    <li><strong>Permissions:</strong> Tüm yetkiler</li>
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="/js/components/AdminDashboard.js"></script>
+    <script type="module" src="/js/components/QuestionManagement.js"></script>
+    
+    <script type="module">
+        import AdminDashboard from '/js/components/AdminDashboard.js';
+        import QuestionManagement from '/js/components/QuestionManagement.js';
+
+        // Global component instances
+        let adminDashboard, questionManagement;
+
+        // Mock admin user
+        const mockAdminUser = {
+            id: 1,
+            username: 'admin',
+            role: 'super_admin',
+            permissions: [
+                'question_create', 'question_edit', 'question_delete', 'question_bulk_import',
+                'analytics_view', 'reports_export', 'users_view', 'users_manage',
+                'system_settings', 'audit_logs_view'
+            ]
+        };
+
+        // Mock dashboard stats
+        const mockDashboardStats = {
+            totalParticipants: 1247,
+            activeUsers: 34,
+            totalQuizSessions: 892,
+            completedQuizzes: 756,
+            averageScore: 78.5,
+            averageCompletionTime: 245, // seconds
+            systemHealth: {
+                uptime: 2847293, // seconds (33 days)
+                responseTime: 145, // ms
+                errorRate: 0.02, // 2%
+                memoryUsage: 0.65, // 65%
+                cpuUsage: 0.23 // 23%
+            },
+            topPerformers: [
+                { name: 'Ahmet Yılmaz', score: 195, completionTime: 180 },
+                { name: 'Ayşe Kaya', score: 188, completionTime: 165 },
+                { name: 'Mehmet Öz', score: 182, completionTime: 198 },
+                { name: 'Fatma Demir', score: 176, completionTime: 203 },
+                { name: 'Ali Çelik', score: 171, completionTime: 221 }
+            ],
+            recentActivity: [
+                {
+                    id: '1',
+                    type: 'registration',
+                    description: 'Yeni kullanıcı kaydı: Zeynep Arslan',
+                    timestamp: new Date(Date.now() - 300000) // 5 minutes ago
+                },
+                {
+                    id: '2',
+                    type: 'quiz_complete',
+                    description: 'Quiz tamamlandı: Mustafa Kaya (165 puan)',
+                    timestamp: new Date(Date.now() - 600000) // 10 minutes ago
+                },
+                {
+                    id: '3',
+                    type: 'admin_action',
+                    description: 'Soru güncellendi: "Sıfır atık nedir?" sorusu',
+                    timestamp: new Date(Date.now() - 900000) // 15 minutes ago
+                },
+                {
+                    id: '4',
+                    type: 'quiz_start',
+                    description: 'Quiz başlatıldı: Elif Yıldız',
+                    timestamp: new Date(Date.now() - 1200000) // 20 minutes ago
+                },
+                {
+                    id: '5',
+                    type: 'registration',
+                    description: 'Yeni kullanıcı kaydı: Can Demir',
+                    timestamp: new Date(Date.now() - 1500000) // 25 minutes ago
+                }
+            ]
+        };
+
+        // Mock questions data
+        const mockQuestions = [
+            {
+                id: 'q001',
+                text: 'Sıfır atık yaşam tarzının temel prensibi nedir?',
+                correctAnswer: 'Reddet, Azalt, Yeniden Kullan, Geri Dönüştür, Çürüt',
+                options: null,
+                difficulty: 3,
+                basePoints: 15,
+                category: 'Temel Bilgiler',
+                isActive: true,
+                createdAt: new Date('2024-01-15'),
+                updatedAt: new Date('2024-01-20'),
+                createdBy: 'admin',
+                updatedBy: 'admin'
+            },
+            {
+                id: 'q002',
+                text: 'Kompost yapımında hangi malzemeler kullanılmamalıdır?',
+                correctAnswer: 'Et artıkları ve süt ürünleri',
+                options: [
+                    'Meyve ve sebze kabukları',
+                    'Kahve telvesi',
+                    'Et artıkları ve süt ürünleri',
+                    'Kuru yapraklar'
+                ],
+                difficulty: 2,
+                basePoints: 12,
+                category: 'Kompost',
+                isActive: true,
+                createdAt: new Date('2024-01-16'),
+                updatedAt: new Date('2024-01-16'),
+                createdBy: 'admin',
+                updatedBy: 'admin'
+            },
+            {
+                id: 'q003',
+                text: 'Plastik atıkların geri dönüşüm süreci kaç aşamadan oluşur?',
+                correctAnswer: '7 aşama',
+                options: ['5 aşama', '6 aşama', '7 aşama', '8 aşama'],
+                difficulty: 4,
+                basePoints: 20,
+                category: 'Geri Dönüşüm',
+                isActive: false,
+                createdAt: new Date('2024-01-17'),
+                updatedAt: new Date('2024-01-22'),
+                createdBy: 'editor',
+                updatedBy: 'admin'
+            },
+            {
+                id: 'q004',
+                text: 'Organik atıkların doğada çürüme süresi ne kadardır?',
+                correctAnswer: '2-6 hafta',
+                options: null,
+                difficulty: 1,
+                basePoints: 8,
+                category: 'Organik Atık',
+                isActive: true,
+                createdAt: new Date('2024-01-18'),
+                updatedAt: new Date('2024-01-18'),
+                createdBy: 'editor',
+                updatedBy: 'editor'
+            },
+            {
+                id: 'q005',
+                text: 'Mikroplastik nedir ve çevre üzerindeki etkisi nelerdir?',
+                correctAnswer: '5 mikrometreden küçük plastik parçacıklar, deniz ekosistemini bozar',
+                options: null,
+                difficulty: 5,
+                basePoints: 25,
+                category: 'Mikroplastik',
+                isActive: true,
+                createdAt: new Date('2024-01-19'),
+                updatedAt: new Date('2024-01-21'),
+                createdBy: 'admin',
+                updatedBy: 'admin'
+            }
+        ];
+
+        // Mock API responses
+        window.api = {
+            admin: {
+                async getDashboardStats() {
+                    // Simulate API delay
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    return {
+                        success: true,
+                        data: mockDashboardStats
+                    };
+                },
+
+                async getQuestions() {
+                    // Simulate API delay
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    
+                    return {
+                        success: true,
+                        data: mockQuestions
+                    };
+                },
+
+                async createQuestion(questionData) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    const newQuestion = {
+                        id: 'q' + Date.now(),
+                        ...questionData,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                        createdBy: 'admin',
+                        updatedBy: 'admin'
+                    };
+                    
+                    return {
+                        success: true,
+                        data: newQuestion
+                    };
+                },
+
+                async updateQuestion(questionId, updates) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    const question = mockQuestions.find(q => q.id === questionId);
+                    if (question) {
+                        const updatedQuestion = {
+                            ...question,
+                            ...updates,
+                            updatedAt: new Date(),
+                            updatedBy: 'admin'
+                        };
+                        
+                        return {
+                            success: true,
+                            data: updatedQuestion
+                        };
+                    }
+                    
+                    return {
+                        success: false,
+                        error: { message: 'Soru bulunamadı' }
+                    };
+                },
+
+                async deleteQuestion(questionId) {
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    return {
+                        success: true,
+                        data: { deleted: true }
+                    };
+                },
+
+                async bulkDeleteQuestions(questionIds) {
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    
+                    return {
+                        success: true,
+                        data: { deletedCount: questionIds.length }
+                    };
+                },
+
+                async bulkUpdateQuestionStatus(questionIds, isActive) {
+                    await new Promise(resolve => setTimeout(resolve, 600));
+                    
+                    return {
+                        success: true,
+                        data: { updatedCount: questionIds.length }
+                    };
+                },
+
+                async exportDashboardReport(format) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Mock file content
+                    const content = `Mock ${format.toUpperCase()} Report\nGenerated: ${new Date().toISOString()}\nData: Dashboard Statistics`;
+                    
+                    return {
+                        success: true,
+                        data: content
+                    };
+                }
+            }
+        };
+
+        // Test functions
+        window.loadTestDashboard = () => {
+            const container = document.getElementById('dashboard-test');
+            container.innerHTML = '<div id="test-dashboard-container"></div>';
+            
+            adminDashboard = new AdminDashboard('test-dashboard-container', mockAdminUser);
+        };
+
+        window.simulateStatsUpdate = () => {
+            if (adminDashboard) {
+                const updateData = {
+                    type: 'dashboard_stats',
+                    data: {
+                        totalParticipants: mockDashboardStats.totalParticipants + 5,
+                        activeUsers: mockDashboardStats.activeUsers + 2
+                    }
+                };
+                
+                adminDashboard.handleRealtimeUpdate(updateData);
+            }
+        };
+
+        window.showSystemAlert = () => {
+            if (adminDashboard) {
+                adminDashboard.showSystemAlert('Test sistem uyarısı mesajı', 'warning');
+            }
+        };
+
+        window.clearDashboard = () => {
+            const container = document.getElementById('dashboard-test');
+            container.innerHTML = '<p class="text-secondary">Dashboard temizlendi</p>';
+            
+            if (adminDashboard) {
+                adminDashboard.cleanup();
+                adminDashboard = null;
+            }
+        };
+
+        window.loadTestQuestions = () => {
+            const container = document.getElementById('questions-test');
+            container.innerHTML = '<div id="test-questions-container"></div>';
+            
+            questionManagement = new QuestionManagement('test-questions-container', mockAdminUser.permissions);
+        };
+
+        window.selectRandomQuestions = () => {
+            if (questionManagement) {
+                // Simulate selecting random questions
+                const randomIds = mockQuestions.slice(0, 2).map(q => q.id);
+                randomIds.forEach(id => {
+                    questionManagement.handleSelectQuestion(id, true);
+                });
+                
+                console.log('Selected questions:', randomIds);
+            }
+        };
+
+        window.testFilters = () => {
+            if (questionManagement) {
+                // Test search filter
+                questionManagement.filters.search = 'kompost';
+                questionManagement.applyFilters();
+                
+                setTimeout(() => {
+                    // Test difficulty filter
+                    questionManagement.filters.search = '';
+                    questionManagement.filters.difficulty = 3;
+                    questionManagement.applyFilters();
+                }, 2000);
+                
+                setTimeout(() => {
+                    // Clear filters
+                    questionManagement.filters = {
+                        search: '',
+                        difficulty: null,
+                        category: '',
+                        isActive: null
+                    };
+                    questionManagement.applyFilters();
+                }, 4000);
+            }
+        };
+
+        window.clearQuestions = () => {
+            const container = document.getElementById('questions-test');
+            container.innerHTML = '<p class="text-secondary">Question management temizlendi</p>';
+            
+            if (questionManagement) {
+                questionManagement.cleanup();
+                questionManagement = null;
+            }
+        };
+
+        window.openAdminPanel = () => {
+            window.open('/admin.html', '_blank');
+        };
+
+        window.openAdminLogin = () => {
+            window.open('/admin-login.html', '_blank');
+        };
+
+        window.setMockAdminUser = () => {
+            localStorage.setItem('admin_token', 'mock-admin-token-12345');
+            localStorage.setItem('admin_user', JSON.stringify(mockAdminUser));
+            
+            console.log('Mock admin user set:', mockAdminUser);
+            alert('Mock admin kullanıcı ayarlandı! Admin paneli açabilirsiniz.');
+        };
+
+        window.clearAdminAuth = () => {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_user');
+            
+            console.log('Admin authentication cleared');
+            alert('Admin authentication temizlendi');
+        };
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Admin panel test page loaded');
+            console.log('Available test functions:', [
+                'loadTestDashboard()', 'simulateStatsUpdate()', 'showSystemAlert()', 'clearDashboard()',
+                'loadTestQuestions()', 'selectRandomQuestions()', 'testFilters()', 'clearQuestions()',
+                'openAdminPanel()', 'openAdminLogin()', 'setMockAdminUser()', 'clearAdminAuth()'
+            ]);
+        });
+    </script>
+
+    <style>
+        .test-info {
+            background: var(--color-surface-variant);
+            padding: var(--space-4);
+            border-radius: var(--radius-lg);
+            margin-top: var(--space-4);
+        }
+
+        .test-info h4 {
+            margin: 0 0 var(--space-3) 0;
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-text-primary);
+        }
+
+        .test-info ul {
+            margin: 0;
+            padding-left: var(--space-4);
+        }
+
+        .test-info li {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-1);
+        }
+
+        .test-info code {
+            background: var(--color-gray-100);
+            padding: var(--space-1);
+            border-radius: var(--radius-sm);
+            font-family: monospace;
+            font-size: var(--font-size-xs);
+        }
+    </style>
+</body>
+</html>

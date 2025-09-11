@@ -1,0 +1,172 @@
+[
+  {
+    "id": "q001",
+    "orderNo": 1,
+    "text": "Sıfır atık yaşam tarzının temel prensibi nedir?",
+    "correctAnswer": "Reddet, Azalt, Yeniden Kullan, Geri Dönüştür, Çürüt",
+    "options": [
+      "Reddet, Azalt, Yeniden Kullan, Geri Dönüştür, Çürüt",
+      "Sadece geri dönüştürme yapmak",
+      "Plastik kullanmamak",
+      "Organik ürünler satın almak"
+    ],
+    "difficulty": 2,
+    "basePoints": 10,
+    "timeLimit": 30,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q002",
+    "orderNo": 2,
+    "text": "Kompost yapımında hangi malzemeler kullanılmamalıdır?",
+    "correctAnswer": "Et artıkları ve süt ürünleri",
+    "options": [
+      "Meyve ve sebze kabukları",
+      "Kahve telvesi",
+      "Et artıkları ve süt ürünleri",
+      "Kuru yapraklar"
+    ],
+    "difficulty": 3,
+    "basePoints": 15,
+    "timeLimit": 25,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q003",
+    "orderNo": 3,
+    "text": "Beeswax wrap (balmumu örtü) neyin yerine kullanılır?",
+    "correctAnswer": "Plastik streç film",
+    "options": [
+      "Alüminyum folyo",
+      "Plastik streç film",
+      "Kağıt havlu",
+      "Bulaşık deterjanı"
+    ],
+    "difficulty": 1,
+    "basePoints": 8,
+    "timeLimit": 20,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q004",
+    "orderNo": 4,
+    "text": "Türkiye'de kişi başı yıllık ortalama atık üretimi yaklaşık ne kadardır?",
+    "correctAnswer": "400-450 kg",
+    "options": [
+      "100-150 kg",
+      "250-300 kg",
+      "400-450 kg",
+      "600-650 kg"
+    ],
+    "difficulty": 4,
+    "basePoints": 20,
+    "timeLimit": 35,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q005",
+    "orderNo": 5,
+    "text": "Hangi malzeme geri dönüşüm sürecinde kalitesini kaybetmez?",
+    "correctAnswer": "Cam",
+    "options": [
+      "Plastik",
+      "Kağıt",
+      "Cam",
+      "Tekstil"
+    ],
+    "difficulty": 2,
+    "basePoints": 12,
+    "timeLimit": 25,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q006",
+    "orderNo": 6,
+    "text": "Sıfır atık hareketinin 5R prensibinde ilk adım hangisidir?",
+    "correctAnswer": "Reddet (Refuse)",
+    "options": [
+      "Geri Dönüştür (Recycle)",
+      "Reddet (Refuse)",
+      "Azalt (Reduce)",
+      "Yeniden Kullan (Reuse)"
+    ],
+    "difficulty": 1,
+    "basePoints": 10,
+    "timeLimit": 20,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q007",
+    "orderNo": 7,
+    "text": "Bir plastik şişenin doğada çözünmesi ortalama ne kadar sürer?",
+    "correctAnswer": "450-500 yıl",
+    "options": [
+      "50-100 yıl",
+      "150-200 yıl",
+      "450-500 yıl",
+      "1000 yıldan fazla"
+    ],
+    "difficulty": 3,
+    "basePoints": 15,
+    "timeLimit": 30,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q008",
+    "orderNo": 8,
+    "text": "Evde yapılabilecek doğal temizlik malzemesi kombinasyonu hangisidir?",
+    "correctAnswer": "Sirke ve karbonat",
+    "options": [
+      "Çamaşır suyu ve amonyak",
+      "Sirke ve karbonat",
+      "Tuz ve şeker",
+      "Sabun ve alkol"
+    ],
+    "difficulty": 2,
+    "basePoints": 12,
+    "timeLimit": 25,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q009",
+    "orderNo": 9,
+    "text": "Türkiye'de Sıfır Atık Projesi hangi yıl başlatılmıştır?",
+    "correctAnswer": "2017",
+    "options": [
+      "2015",
+      "2016",
+      "2017",
+      "2018"
+    ],
+    "difficulty": 3,
+    "basePoints": 18,
+    "timeLimit": 30,
+    "category": "zero_waste",
+    "isActive": true
+  },
+  {
+    "id": "q010",
+    "orderNo": 10,
+    "text": "Hangi atık türü 'mavi' geri dönüşüm kutusuna atılır?",
+    "correctAnswer": "Kağıt ve karton",
+    "options": [
+      "Cam",
+      "Plastik",
+      "Kağıt ve karton",
+      "Metal"
+    ],
+    "difficulty": 1,
+    "basePoints": 10,
+    "timeLimit": 20,
+    "category": "zero_waste",
+    "isActive": true
+  }
+]

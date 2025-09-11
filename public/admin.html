@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Sıfır Atık Yarışması</title>
+    <link rel="stylesheet" href="/css/main.css">
+    <style>
+        .admin-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        .admin-sidebar {
+            width: 280px;
+            background: var(--color-surface-variant);
+            border-right: 1px solid var(--color-outline);
+            padding: var(--space-6);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .admin-main {
+            flex: 1;
+            margin-left: 280px;
+            background: var(--color-background);
+            min-height: 100vh;
+        }
+        
+        .sidebar-header {
+            text-align: center;
+            padding-bottom: var(--space-6);
+            border-bottom: 1px solid var(--color-outline);
+            margin-bottom: var(--space-6);
+        }
+        
+        .sidebar-logo {
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary-600);
+            margin-bottom: var(--space-2);
+        }
+        
+        .sidebar-subtitle {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+        
+        .sidebar-nav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .nav-item {
+            margin-bottom: var(--space-2);
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-3);
+            color: var(--color-text-primary);
+            text-decoration: none;
+            border-radius: var(--radius-lg);
+            transition: all var(--duration-150) ease-in-out;
+        }
+        
+        .nav-link:hover {
+            background: var(--color-primary-100);
+            color: var(--color-primary-700);
+        }
+        
+        .nav-link.active {
+            background: var(--color-primary-500);
+            color: white;
+        }
+        
+        .nav-icon {
+            font-size: var(--font-size-lg);
+        }
+        
+        .nav-text {
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-medium);
+        }
+        
+        .sidebar-footer {
+            position: absolute;
+            bottom: var(--space-6);
+            left: var(--space-6);
+            right: var(--space-6);
+            padding-top: var(--space-6);
+            border-top: 1px solid var(--color-outline);
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--color-primary-500);
+            color: white;
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: var(--font-weight-bold);
+        }
+        
+        .user-details {
+            flex: 1;
+        }
+        
+        .user-name {
+            display: block;
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-text-primary);
+        }
+        
+        .user-role {
+            display: block;
+            font-size: var(--font-size-xs);
+            color: var(--color-text-secondary);
+        }
+        
+        .logout-btn {
+            width: 100%;
+            padding: var(--space-2);
+            background: none;
+            border: 1px solid var(--color-outline);
+            border-radius: var(--radius-lg);
+            color: var(--color-text-secondary);
+            font-size: var(--font-size-sm);
+            cursor: pointer;
+            transition: all var(--duration-150) ease-in-out;
+        }
+        
+        .logout-btn:hover {
+            background: var(--color-error-surface);
+            border-color: var(--color-error);
+            color: var(--color-error);
+        }
+        
+        @media (max-width: 768px) {
+            .admin-sidebar {
+                transform: translateX(-100%);
+                transition: transform var(--duration-300) ease-in-out;
+            }
+            
+            .admin-sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .admin-main {
+                margin-left: 0;
+            }
+            
+            .mobile-menu-btn {
+                position: fixed;
+                top: var(--space-4);
+                left: var(--space-4);
+                z-index: var(--z-index-dropdown);
+                background: var(--color-primary-500);
+                color: white;
+                border: none;
+                padding: var(--space-3);
+                border-radius: var(--radius-lg);
+                cursor: pointer;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile Menu Button -->
+    <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+
+    <div class="admin-layout">
+        <!-- Admin Sidebar -->
+        <aside class="admin-sidebar" id="admin-sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">🌱 Sıfır Atık</div>
+                <div class="sidebar-subtitle">Admin Panel</div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="#dashboard" class="nav-link active" data-page="dashboard">
+                            <span class="nav-icon">🏠</span>
+                            <span class="nav-text">Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#questions" class="nav-link" data-page="questions">
+                            <span class="nav-icon">❓</span>
+                            <span class="nav-text">Soru Yönetimi</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#users" class="nav-link" data-page="users">
+                            <span class="nav-icon">👥</span>
+                            <span class="nav-text">Kullanıcılar</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#analytics" class="nav-link" data-page="analytics">
+                            <span class="nav-icon">📊</span>
+                            <span class="nav-text">Analitik</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#reports" class="nav-link" data-page="reports">
+                            <span class="nav-icon">📋</span>
+                            <span class="nav-text">Raporlar</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#settings" class="nav-link" data-page="settings">
+                            <span class="nav-icon">⚙️</span>
+                            <span class="nav-text">Ayarlar</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#logs" class="nav-link" data-page="logs">
+                            <span class="nav-icon">📝</span>
+                            <span class="nav-text">Sistem Logları</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar" id="user-avatar">A</div>
+                    <div class="user-details">
+                        <span class="user-name" id="user-name">Admin User</span>
+                        <span class="user-role" id="user-role">Süper Admin</span>
+                    </div>
+                </div>
+                <button class="logout-btn" id="logout-btn">
+                    🚪 Çıkış Yap
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="admin-main">
+            <div id="admin-content">
+                <!-- Dynamic content will be loaded here -->
+                <div class="content-loading">
+                    <div class="loading"></div>
+                    <span>Admin panel yükleniyor...</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="/js/components/AdminDashboard.js"></script>
+    <script type="module" src="/js/components/QuestionManagement.js"></script>
+    
+    <script type="module">
+        import AdminDashboard from '/js/components/AdminDashboard.js';
+        import QuestionManagement from '/js/components/QuestionManagement.js';
+        import { api } from '/js/core/ApiClient.ts';
+
+        class AdminPanel {
+            constructor() {
+                this.currentPage = 'dashboard';
+                this.currentComponent = null;
+                this.adminUser = null;
+                this.adminPermissions = [];
+                
+                this.init();
+            }
+
+            async init() {
+                try {
+                    // Check authentication
+                    await this.checkAuthentication();
+                    
+                    // Setup navigation
+                    this.setupNavigation();
+                    
+                    // Setup mobile menu
+                    this.setupMobileMenu();
+                    
+                    // Load initial page
+                    this.loadPage('dashboard');
+                    
+                } catch (error) {
+                    console.error('Admin panel initialization failed:', error);
+                    this.redirectToLogin();
+                }
+            }
+
+            async checkAuthentication() {
+                const token = localStorage.getItem('admin_token');
+                if (!token) {
+                    throw new Error('No admin token found');
+                }
+
+                try {
+                    const response = await api.admin.verifyToken();
+                    
+                    if (response.success && response.data) {
+                        this.adminUser = response.data.user;
+                        this.adminPermissions = response.data.permissions;
+                        this.updateUserInfo();
+                    } else {
+                        throw new Error('Token verification failed');
+                    }
+                } catch (error) {
+                    localStorage.removeItem('admin_token');
+                    throw error;
+                }
+            }
+
+            updateUserInfo() {
+                const userAvatar = document.getElementById('user-avatar');
+                const userName = document.getElementById('user-name');
+                const userRole = document.getElementById('user-role');
+
+                if (userAvatar && this.adminUser) {
+                    userAvatar.textContent = this.adminUser.username.charAt(0).toUpperCase();
+                }
+
+                if (userName && this.adminUser) {
+                    userName.textContent = this.adminUser.username;
+                }
+
+                if (userRole && this.adminUser) {
+                    userRole.textContent = this.adminUser.role === 'super_admin' ? 'Süper Admin' : 'Admin';
+                }
+            }
+
+            setupNavigation() {
+                const navLinks = document.querySelectorAll('.nav-link');
+                
+                navLinks.forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const page = link.getAttribute('data-page');
+                        this.loadPage(page);
+                    });
+                });
+
+                // Handle custom navigation events
+                window.addEventListener('admin-navigate', (e) => {
+                    this.loadPage(e.detail.page);
+                });
+
+                // Logout handler
+                const logoutBtn = document.getElementById('logout-btn');
+                if (logoutBtn) {
+                    logoutBtn.addEventListener('click', () => this.handleLogout());
+                }
+            }
+
+            setupMobileMenu() {
+                const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+                const sidebar = document.getElementById('admin-sidebar');
+
+                if (mobileMenuBtn && sidebar) {
+                    mobileMenuBtn.addEventListener('click', () => {
+                        sidebar.classList.toggle('open');
+                    });
+
+                    // Close sidebar when clicking outside on mobile
+                    document.addEventListener('click', (e) => {
+                        if (window.innerWidth <= 768) {
+                            if (!sidebar.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
+                                sidebar.classList.remove('open');
+                            }
+                        }
+                    });
+                }
+            }
+
+            async loadPage(page) {
+                // Update navigation
+                this.updateNavigation(page);
+                
+                // Cleanup current component
+                if (this.currentComponent && typeof this.currentComponent.cleanup === 'function') {
+                    this.currentComponent.cleanup();
+                }
+
+                // Show loading
+                this.showLoading();
+
+                try {
+                    switch (page) {
+                        case 'dashboard':
+                            await this.loadDashboard();
+                            break;
+                        case 'questions':
+                            await this.loadQuestionManagement();
+                            break;
+                        case 'users':
+                            await this.loadUserManagement();
+                            break;
+                        case 'analytics':
+                            await this.loadAnalytics();
+                            break;
+                        case 'reports':
+                            await this.loadReports();
+                            break;
+                        case 'settings':
+                            await this.loadSettings();
+                            break;
+                        case 'logs':
+                            await this.loadLogs();
+                            break;
+                        default:
+                            throw new Error(`Unknown page: ${page}`);
+                    }
+                    
+                    this.currentPage = page;
+                    
+                } catch (error) {
+                    console.error(`Failed to load page: ${page}`, error);
+                    this.showError(`Sayfa yüklenemedi: ${error.message}`);
+                }
+            }
+
+            updateNavigation(page) {
+                const navLinks = document.querySelectorAll('.nav-link');
+                
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('data-page') === page) {
+                        link.classList.add('active');
+                    }
+                });
+            }
+
+            showLoading() {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = `
+                    <div class="content-loading">
+                        <div class="loading"></div>
+                        <span>Sayfa yükleniyor...</span>
+                    </div>
+                `;
+            }
+
+            showError(message) {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = `
+                    <div class="content-error">
+                        <span class="error-icon">⚠️</span>
+                        <h2>Sayfa Yüklenemedi</h2>
+                        <p>${message}</p>
+                        <button class="btn btn-primary" onclick="location.reload()">
+                            Sayfayı Yenile
+                        </button>
+                    </div>
+                `;
+            }
+
+            async loadDashboard() {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = '<div id="dashboard-container"></div>';
+                
+                this.currentComponent = new AdminDashboard('dashboard-container', this.adminUser);
+            }
+
+            async loadQuestionManagement() {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = '<div id="questions-container"></div>';
+                
+                this.currentComponent = new QuestionManagement('questions-container', this.adminPermissions);
+            }
+
+            async loadUserManagement() {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = `
+                    <div class="feature-placeholder">
+                        <span class="placeholder-icon">👥</span>
+                        <h2>Kullanıcı Yönetimi</h2>
+                        <p>Bu özellik yakında eklenecek...</p>
+                    </div>
+                `;
+            }
+
+            async loadAnalytics() {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = `
+                    <div class="feature-placeholder">
+                        <span class="placeholder-icon">📊</span>
+                        <h2>Detaylı Analitik</h2>
+                        <p>Analytics dashboard yakında eklenecek...</p>
+                    </div>
+                `;
+            }
+
+            async loadReports() {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = `
+                    <div class="feature-placeholder">
+                        <span class="placeholder-icon">📋</span>
+                        <h2>Raporlar</h2>
+                        <p>Rapor sistemi yakında eklenecek...</p>
+                    </div>
+                `;
+            }
+
+            async loadSettings() {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = `
+                    <div class="feature-placeholder">
+                        <span class="placeholder-icon">⚙️</span>
+                        <h2>Sistem Ayarları</h2>
+                        <p>Ayarlar paneli yakında eklenecek...</p>
+                    </div>
+                `;
+            }
+
+            async loadLogs() {
+                const contentArea = document.getElementById('admin-content');
+                contentArea.innerHTML = `
+                    <div class="feature-placeholder">
+                        <span class="placeholder-icon">📝</span>
+                        <h2>Sistem Logları</h2>
+                        <p>Log görüntüleyici yakında eklenecek...</p>
+                    </div>
+                `;
+            }
+
+            async handleLogout() {
+                if (confirm('Çıkış yapmak istediğinizden emin misiniz?')) {
+                    try {
+                        await api.admin.logout();
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                    } finally {
+                        localStorage.removeItem('admin_token');
+                        this.redirectToLogin();
+                    }
+                }
+            }
+
+            redirectToLogin() {
+                window.location.href = '/admin-login.html';
+            }
+        }
+
+        // Initialize admin panel when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new AdminPanel();
+        });
+
+        // Mock admin login for testing
+        window.mockAdminLogin = () => {
+            const mockUser = {
+                id: 1,
+                username: 'admin',
+                role: 'super_admin',
+                permissions: [
+                    'question_create', 'question_edit', 'question_delete', 'question_bulk_import',
+                    'analytics_view', 'reports_export', 'users_view', 'users_manage'
+                ]
+            };
+            
+            localStorage.setItem('admin_token', 'mock-admin-token');
+            location.reload();
+        };
+    </script>
+
+    <style>
+        .content-loading,
+        .content-error {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            text-align: center;
+            gap: var(--space-4);
+        }
+
+        .feature-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            text-align: center;
+            gap: var(--space-4);
+            padding: var(--space-12);
+        }
+
+        .placeholder-icon {
+            font-size: 4rem;
+            opacity: 0.5;
+        }
+
+        .feature-placeholder h2 {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-text-primary);
+            margin: 0;
+        }
+
+        .feature-placeholder p {
+            font-size: var(--font-size-base);
+            color: var(--color-text-secondary);
+            margin: 0;
+        }
+    </style>
+</body>
+</html>

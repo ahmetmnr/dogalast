@@ -1,0 +1,72 @@
+[
+  {
+    "title": "Sıfır Atık Nedir?",
+    "content": "Sıfır atık, atık üretimini minimize etmeyi ve kaynakları maksimum verimlilikle kullanmayı hedefleyen bir yaşam felsefesidir. 5R prensibi ile çalışır: Reddet (Refuse), Azalt (Reduce), Yeniden Kullan (Reuse), Geri Dönüştür (Recycle), Çürüt (Rot). Bu yaklaşım, doğal kaynakların korunması, ekonomik tasarruf ve çevresel sürdürülebilirlik açısından kritik öneme sahiptir.",
+    "tags": "sıfır atık, 5R, sürdürülebilirlik, çevre koruma",
+    "category": "zero_waste",
+    "confidenceScore": 1.0
+  },
+  {
+    "title": "5R Prensibi Detaylı Açıklama",
+    "content": "5R prensibi sıfır atık yaşamının temelini oluşturur: 1) Reddet (Refuse): İhtiyacınız olmayan şeyleri reddedin. 2) Azalt (Reduce): Tüketiminizi minimize edin. 3) Yeniden Kullan (Reuse): Eşyaları tekrar tekrar kullanın. 4) Geri Dönüştür (Recycle): Geri dönüştürülebilir malzemeleri ayırın. 5) Çürüt (Rot): Organik atıkları kompost yapın.",
+    "tags": "5R prensibi, reddet, azalt, yeniden kullan, geri dönüştür, kompost",
+    "category": "zero_waste",
+    "confidenceScore": 1.0
+  },
+  {
+    "title": "Kompost Nasıl Yapılır?",
+    "content": "Kompost yapmak için organik atıkları (meyve-sebze kabukları, kahve telvesi, yumurta kabuğu) kuru malzemelerle (kuru yaprak, karton, gazete) 3:1 oranında karıştırın. Düzenli olarak karıştırarak havalandırın ve nemli tutun. Et, süt ürünleri, yağlı yiyecekler ve evcil hayvan dışkısı kompost yapımında kullanılmamalıdır. 3-6 ayda zengin bir toprak iyileştirici elde edersiniz.",
+    "tags": "kompost, organik atık, geri dönüşüm, toprak",
+    "category": "zero_waste",
+    "confidenceScore": 0.95
+  },
+  {
+    "title": "Plastik Alternatifleri",
+    "content": "Günlük hayatta plastik yerine kullanılabilecek sürdürülebilir alternatifler: Cam kavanozlar (saklama için), paslanmaz çelik mataralar (pet şişe yerine), bez çantalar (poşet yerine), balmumu örtüler (streç film yerine), bambu diş fırçaları, metal/cam pipetler, silikon saklama kapları. Bu ürünler uzun ömürlü, sağlıklı ve çevre dostudur.",
+    "tags": "plastik alternatifi, sürdürülebilir ürünler, çevre dostu",
+    "category": "zero_waste",
+    "confidenceScore": 0.9
+  },
+  {
+    "title": "Türkiye'de Sıfır Atık Projesi",
+    "content": "Türkiye'de Sıfır Atık Projesi 2017 yılında Emine Erdoğan'ın himayesinde başlatılmıştır. Proje kapsamında 2023 yılına kadar tüm kamu kurum ve kuruluşlarında, 2025'e kadar ise ülke genelinde sıfır atık sisteminin kurulması hedeflenmiştir. Proje, atık azaltımı, kaynakların verimli kullanımı ve geri dönüşüm oranlarının artırılmasını amaçlamaktadır.",
+    "tags": "Türkiye, sıfır atık projesi, 2017, kamu politikası",
+    "category": "zero_waste",
+    "confidenceScore": 0.95
+  },
+  {
+    "title": "Atık Ayrıştırma ve Renk Kodları",
+    "content": "Türkiye'de atık ayrıştırma renk kodları: MAVİ - Kağıt ve karton atıklar, SARI - Plastik atıklar, YEŞİL - Cam atıklar, GRİ - Metal atıklar, TURUNCU - Organik atıklar, SİYAH - Diğer atıklar (geri dönüştürülemeyen). Doğru ayrıştırma, geri dönüşüm verimliliğini artırır ve çevre kirliliğini azaltır.",
+    "tags": "atık ayrıştırma, renk kodları, geri dönüşüm, mavi kutu, sarı kutu",
+    "category": "zero_waste",
+    "confidenceScore": 0.98
+  },
+  {
+    "title": "Sıfır Atık ve Ekonomi",
+    "content": "Sıfır atık yaklaşımı sadece çevresel değil, ekonomik faydalar da sağlar. Atık azaltımı ile hammadde tasarrufu, geri dönüşüm ile yeni iş alanları yaratılması, kompost ile tarımsal verimlilik artışı sağlanır. Türkiye'de sıfır atık projesi ile yıllık 20 milyar TL tasarruf hedeflenmektedir. Ayrıca döngüsel ekonomi modeli ile sürdürülebilir kalkınma desteklenir.",
+    "tags": "ekonomi, tasarruf, döngüsel ekonomi, istihdam",
+    "category": "zero_waste",
+    "confidenceScore": 0.88
+  },
+  {
+    "title": "Evde Sıfır Atık Uygulamaları",
+    "content": "Evde sıfır atık için pratik öneriler: Alışverişte bez çanta kullanın, ürünleri ambalajsız satın alın, cam kavanozlarda saklayın, kendi temizlik ürünlerinizi yapın (sirke, karbonat, limon), ikinci el alışverişi tercih edin, bozulan eşyaları tamir edin, dijital fatura kullanın, yemek artıklarını değerlendirin, su tasarrufu yapın.",
+    "tags": "ev, pratik öneriler, günlük yaşam, tasarruf",
+    "category": "zero_waste",
+    "confidenceScore": 0.92
+  },
+  {
+    "title": "Plastik Kirliliği ve Çevresel Etkileri",
+    "content": "Plastik atıklar doğada 450-1000 yıl arasında çözünür. Okyanuslarda plastik adaları oluşur, deniz canlıları mikroplastikleri besin zanneder. Yılda 8 milyon ton plastik okyanuslara karışır. Plastik üretimi fosil yakıt tüketir ve sera gazı salınımına neden olur. Mikroplastikler besin zincirine girerek insan sağlığını tehdit eder.",
+    "tags": "plastik kirliliği, okyanuslar, mikroplastik, çevre",
+    "category": "zero_waste",
+    "confidenceScore": 0.94
+  },
+  {
+    "title": "Doğal Temizlik Malzemeleri",
+    "content": "Kimyasal temizlik ürünleri yerine doğal alternatifler: Sirke (kireç çözücü, dezenfektan), karbonat (yağ çözücü, koku giderici), limon (leke çıkarıcı, parlatıcı), kastil sabunu (genel temizlik), boraks (güçlü temizleyici), hidrojen peroksit (beyazlatıcı). Bu malzemeler hem ekonomik hem de çevre ve sağlık dostudur.",
+    "tags": "doğal temizlik, sirke, karbonat, limon, sağlık",
+    "category": "zero_waste",
+    "confidenceScore": 0.91
+  }
+]

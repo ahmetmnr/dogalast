@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sıfır Atık konusunda AI destekli sesli yarışma uygulaması">
+    <meta name="keywords" content="sıfır atık, yarışma, çevre, sürdürülebilirlik">
+    <meta name="author" content="Zero Waste Team">
+    
+    <!-- Security headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    
+    <!-- Open Graph meta tags -->
+    <meta property="og:title" content="Sıfır Atık Yarışması">
+    <meta property="og:description" content="Sıfır Atık konusunda AI destekli sesli yarışma">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="tr_TR">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/css/main.css">
+    
+    <title>Sıfır Atık Yarışması</title>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-link">Ana içeriğe geç</a>
+    
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <h1 class="logo-text">🌱 Sıfır Atık Yarışması</h1>
+                    <p class="logo-subtitle">AI destekli sesli yarışma</p>
+                </div>
+                
+                <nav class="header-nav" aria-label="Ana navigasyon">
+                    <a href="#leaderboard" class="nav-link">Liderlik Tablosu</a>
+                    <a href="/quiz.html" class="btn btn-primary">Yarışmaya Katıl</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="main-content" class="main">
+        <!-- Hero Section -->
+        <section class="hero" aria-labelledby="hero-title">
+            <div class="container">
+                <div class="hero-content">
+                    <h2 id="hero-title" class="hero-title">
+                        Sıfır Atık Bilginizi Test Edin!
+                    </h2>
+                    <p class="hero-description">
+                        AI destekli sesli asistanla etkileşimli yarışma deneyimi yaşayın. 
+                        Sıfır atık konusundaki bilginizi test edin ve liderlik tablosunda yerinizi alın.
+                    </p>
+                    
+                    <div class="hero-actions">
+                        <a href="/register.html" class="btn btn-primary btn-lg">
+                            Kayıt Ol ve Başla
+                        </a>
+                        <button class="btn btn-outline btn-lg" onclick="showQRCode()">
+                            QR Kod Göster
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- QR Code Section -->
+                <div class="qr-section" id="qr-section">
+                    <div class="qr-card card">
+                        <div class="card-header">
+                            <h3 class="card-title">Mobil Cihazınızla Katılın</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="qr-code" id="qr-code">
+                                <!-- QR code will be generated here -->
+                                <div class="qr-placeholder">
+                                    <div class="loading"></div>
+                                    <p>QR kod oluşturuluyor...</p>
+                                </div>
+                            </div>
+                            <p class="qr-instructions">
+                                QR kodu telefonunuzla okutarak yarışmaya katılabilirsiniz
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Leaderboard Section -->
+        <section class="leaderboard-section" id="leaderboard" aria-labelledby="leaderboard-title">
+            <div class="container">
+                <div class="section-header">
+                    <h2 id="leaderboard-title" class="section-title">
+                        🏆 Liderlik Tablosu
+                    </h2>
+                    <p class="section-description">
+                        En başarılı katılımcılar ve skorları
+                    </p>
+                </div>
+                
+                <div class="leaderboard-container">
+                    <div class="leaderboard" id="leaderboard-list">
+                        <!-- Leaderboard will be loaded here -->
+                        <div class="loading-state">
+                            <div class="loading"></div>
+                            <p>Liderlik tablosu yükleniyor...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="leaderboard-footer">
+                        <button class="btn btn-outline" onclick="refreshLeaderboard()">
+                            Yenile
+                        </button>
+                        <span class="last-updated" id="last-updated">
+                            <!-- Last update time will be shown here -->
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section class="features-section" aria-labelledby="features-title">
+            <div class="container">
+                <h2 id="features-title" class="section-title text-center">
+                    Özellikler
+                </h2>
+                
+                <div class="features-grid">
+                    <div class="feature-card card">
+                        <div class="card-body">
+                            <div class="feature-icon">🎙️</div>
+                            <h3 class="feature-title">Sesli Etkileşim</h3>
+                            <p class="feature-description">
+                                OpenAI Realtime API ile doğal dil işleme ve sesli yanıt sistemi
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card card">
+                        <div class="card-body">
+                            <div class="feature-icon">⚡</div>
+                            <h3 class="feature-title">Düşük Gecikme</h3>
+                            <p class="feature-description">
+                                Gerçek zamanlı ses işleme ile milisaniye seviyesinde yanıt hızı
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card card">
+                        <div class="card-body">
+                            <div class="feature-icon">🏆</div>
+                            <h3 class="feature-title">Adil Puanlama</h3>
+                            <p class="feature-description">
+                                Server-authoritative zamanlama ile manipülasyon-proof puanlama
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card card">
+                        <div class="card-body">
+                            <div class="feature-icon">🛡️</div>
+                            <h3 class="feature-title">Gizlilik Odaklı</h3>
+                            <p class="feature-description">
+                                KVKK uyumlu veri yönetimi ve gizlilik koruması
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3 class="footer-title">Sıfır Atık Yarışması</h3>
+                    <p class="footer-description">
+                        Çevre bilincini artırmak için tasarlanmış eğitici yarışma platformu
+                    </p>
+                </div>
+                
+                <div class="footer-section">
+                    <h4 class="footer-subtitle">Bağlantılar</h4>
+                    <ul class="footer-links">
+                        <li><a href="/register.html">Kayıt Ol</a></li>
+                        <li><a href="/quiz.html">Yarışmaya Katıl</a></li>
+                        <li><a href="/admin.html">Admin Panel</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4 class="footer-subtitle">Gizlilik</h4>
+                    <ul class="footer-links">
+                        <li><a href="#privacy">Gizlilik Politikası</a></li>
+                        <li><a href="#terms">Kullanım Koşulları</a></li>
+                        <li><a href="#kvkk">KVKK Bildirimi</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p class="footer-copyright">
+                    © 2025 Sıfır Atık Yarışması. Tüm hakları saklıdır.
+                </p>
+                <p class="footer-tech">
+                    AI destekli teknoloji ile geliştirilmiştir
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script type="module" src="/js/core/ApiClient.js"></script>
+    <script type="module" src="/js/components/Leaderboard.js"></script>
+    <script type="module" src="/js/utils/qr-code.js"></script>
+    <script type="module">
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Load leaderboard
+                await loadLeaderboard();
+                
+                // Set up auto-refresh
+                setInterval(loadLeaderboard, 30000); // Refresh every 30 seconds
+                
+                // Set up QR code
+                setupQRCode();
+                
+                console.log('Homepage initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize homepage:', error);
+            }
+        });
+        
+        // Global functions
+        window.showQRCode = function() {
+            const qrSection = document.getElementById('qr-section');
+            if (qrSection) {
+                qrSection.style.display = qrSection.style.display === 'none' ? 'block' : 'none';
+            }
+        };
+        
+        window.refreshLeaderboard = async function() {
+            try {
+                await loadLeaderboard();
+                console.log('Leaderboard refreshed');
+            } catch (error) {
+                console.error('Failed to refresh leaderboard:', error);
+            }
+        };
+        
+        async function loadLeaderboard() {
+            try {
+                const { api } = await import('/js/core/ApiClient.ts');
+                const response = await api.leaderboard.get(10, 0);
+                
+                if (response.success && response.data) {
+                    renderLeaderboard(response.data.leaderboard);
+                    updateLastUpdated();
+                }
+            } catch (error) {
+                console.error('Failed to load leaderboard:', error);
+                showLeaderboardError();
+            }
+        }
+        
+        function renderLeaderboard(entries) {
+            const container = document.getElementById('leaderboard-list');
+            if (!container) return;
+            
+            if (entries.length === 0) {
+                container.innerHTML = '<p class="text-center text-secondary">Henüz yarışma sonucu yok</p>';
+                return;
+            }
+            
+            const html = entries.map(entry => `
+                <div class="leaderboard-entry">
+                    <div class="leaderboard-rank">${entry.rank}</div>
+                    <div class="leaderboard-name">${entry.name}</div>
+                    <div class="leaderboard-score">${entry.score}</div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = html;
+        }
+        
+        function showLeaderboardError() {
+            const container = document.getElementById('leaderboard-list');
+            if (container) {
+                container.innerHTML = '<p class="text-center text-error">Liderlik tablosu yüklenemedi</p>';
+            }
+        }
+        
+        function updateLastUpdated() {
+            const element = document.getElementById('last-updated');
+            if (element) {
+                element.textContent = `Son güncelleme: ${new Date().toLocaleTimeString('tr-TR')}`;
+            }
+        }
+        
+        function setupQRCode() {
+            // QR code setup will be implemented
+            const qrCode = document.getElementById('qr-code');
+            if (qrCode) {
+                // For now, show the registration URL
+                const registrationUrl = `${window.location.origin}/register.html`;
+                qrCode.innerHTML = `
+                    <div class="qr-placeholder">
+                        <p>Kayıt URL: <a href="${registrationUrl}">${registrationUrl}</a></p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+    
+    <style>
+        /* Page-specific styles */
+        .header {
+            background-color: var(--color-surface);
+            border-bottom: 1px solid var(--color-outline);
+            padding: var(--space-4) 0;
+        }
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: var(--space-4);
+        }
+        
+        .logo-text {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            margin: 0;
+        }
+        
+        .logo-subtitle {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+            margin: 0;
+        }
+        
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+        }
+        
+        .nav-link {
+            font-weight: var(--font-weight-medium);
+        }
+        
+        .hero {
+            padding: var(--space-16) 0;
+            background: linear-gradient(135deg, var(--color-primary-50), var(--color-secondary-50));
+        }
+        
+        .hero-content {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .hero-title {
+            font-size: var(--font-size-4xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-6);
+            color: var(--color-text-primary);
+        }
+        
+        .hero-description {
+            font-size: var(--font-size-lg);
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-8);
+            line-height: 1.6;
+        }
+        
+        .hero-actions {
+            display: flex;
+            gap: var(--space-4);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .qr-section {
+            margin-top: var(--space-12);
+            display: none;
+        }
+        
+        .qr-card {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .qr-code {
+            text-align: center;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .qr-placeholder {
+            text-align: center;
+        }
+        
+        .qr-instructions {
+            text-align: center;
+            color: var(--color-text-secondary);
+            margin-top: var(--space-4);
+        }
+        
+        .leaderboard-section {
+            padding: var(--space-16) 0;
+        }
+        
+        .section-header {
+            text-align: center;
+            margin-bottom: var(--space-12);
+        }
+        
+        .section-title {
+            font-size: var(--font-size-3xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-4);
+        }
+        
+        .section-description {
+            font-size: var(--font-size-lg);
+            color: var(--color-text-secondary);
+        }
+        
+        .leaderboard-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .leaderboard {
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-outline);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            margin-bottom: var(--space-6);
+        }
+        
+        .leaderboard-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .last-updated {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+        
+        .loading-state {
+            text-align: center;
+            padding: var(--space-8);
+        }
+        
+        .features-section {
+            padding: var(--space-16) 0;
+            background-color: var(--color-surface-variant);
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-6);
+            margin-top: var(--space-8);
+        }
+        
+        .feature-card {
+            text-align: center;
+        }
+        
+        .feature-icon {
+            font-size: var(--font-size-4xl);
+            margin-bottom: var(--space-4);
+        }
+        
+        .feature-title {
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-3);
+        }
+        
+        .feature-description {
+            color: var(--color-text-secondary);
+            line-height: 1.6;
+        }
+        
+        .footer {
+            background-color: var(--color-gray-900);
+            color: var(--color-gray-100);
+            padding: var(--space-12) 0 var(--space-6);
+        }
+        
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-8);
+            margin-bottom: var(--space-8);
+        }
+        
+        .footer-title {
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-4);
+            color: var(--color-gray-100);
+        }
+        
+        .footer-subtitle {
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-medium);
+            margin-bottom: var(--space-3);
+            color: var(--color-gray-200);
+        }
+        
+        .footer-description {
+            color: var(--color-gray-300);
+            line-height: 1.6;
+        }
+        
+        .footer-links {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .footer-links li {
+            margin-bottom: var(--space-2);
+        }
+        
+        .footer-links a {
+            color: var(--color-gray-300);
+            transition: color var(--duration-150) var(--ease-in-out);
+        }
+        
+        .footer-links a:hover {
+            color: var(--color-gray-100);
+        }
+        
+        .footer-bottom {
+            border-top: 1px solid var(--color-gray-700);
+            padding-top: var(--space-6);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--space-4);
+        }
+        
+        .footer-copyright,
+        .footer-tech {
+            font-size: var(--font-size-sm);
+            color: var(--color-gray-400);
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .header-content {
+                text-align: center;
+            }
+            
+            .hero-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .footer-bottom {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</body>
+</html>

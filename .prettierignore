@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+bun.lockb
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+.wrangler/
+coverage/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# Generated files
+*.generated.ts
+*.generated.js
+
+# Database
+*.db
+*.sqlite
+
+# Miscellaneous
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

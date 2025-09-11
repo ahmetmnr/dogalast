@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sıfır Atık Yarışması - AI destekli sesli yarışma">
+    <meta name="robots" content="noindex, nofollow">
+    
+    <!-- Security headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    
+    <!-- Stylesheets -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/main.css">
+    
+    <title>Yarışma - Sıfır Atık Yarışması</title>
+</head>
+<body>
+    <!-- Skip to main content -->
+    <a href="#main-content" class="skip-link">Ana içeriğe geç</a>
+    
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <a href="/" class="logo-link">
+                        <h1 class="logo-text">🌱 Sıfır Atık Yarışması</h1>
+                    </a>
+                </div>
+                
+                <nav class="header-nav">
+                    <a href="/" class="nav-link">Ana Sayfa</a>
+                    <a href="/#leaderboard" class="nav-link">Liderlik Tablosu</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="main-content" class="main">
+        <div class="container">
+            <!-- Quiz Interface Container -->
+            <div id="quiz-container" class="quiz-container">
+                <!-- Quiz interface will be rendered here by JavaScript -->
+                <div class="initialization-screen">
+                    <div class="init-content">
+                        <div class="init-icon">🎙️</div>
+                        <h2 class="init-title">Sesli Yarışma Hazırlanıyor</h2>
+                        <p class="init-description">
+                            Mikrofon erişimi isteyeceğiz ve ses sisteminizi kalibre edeceğiz.
+                        </p>
+                        <div class="init-requirements">
+                            <h3>Gereksinimler:</h3>
+                            <ul>
+                                <li>🎤 Mikrofon erişimi</li>
+                                <li>🔊 Hoparlör veya kulaklık</li>
+                                <li>🌐 Kararlı internet bağlantısı</li>
+                                <li>🤫 Sessiz bir ortam (önerilen)</li>
+                            </ul>
+                        </div>
+                        <button class="btn btn-primary btn-lg" id="init-quiz-btn">
+                            Yarışmayı Başlat
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script type="module">
+        import QuizInterface from '/js/components/QuizInterface.ts';
+        import { apiClient } from '/js/core/ApiClient.ts';
+
+        let quizInterface = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Check authentication
+                if (!apiClient.isAuthenticated()) {
+                    // Redirect to registration if not authenticated
+                    window.location.href = '/register.html';
+                    return;
+                }
+
+                // Initialize quiz interface
+                quizInterface = new QuizInterface({
+                    containerId: 'quiz-container',
+                    onQuizComplete: (results) => {
+                        console.log('Quiz completed:', results);
+                        // Could show additional completion UI here
+                    },
+                    onError: (error) => {
+                        console.error('Quiz error:', error);
+                        showGlobalError(error);
+                    },
+                    onStateChange: (state) => {
+                        console.log('Quiz state changed:', state);
+                        // Could update URL or localStorage here
+                    }
+                });
+
+                // Show initialization button
+                const initBtn = document.getElementById('init-quiz-btn');
+                if (initBtn) {
+                    initBtn.addEventListener('click', async () => {
+                        try {
+                            initBtn.disabled = true;
+                            initBtn.textContent = 'Hazırlanıyor...';
+
+                            await quizInterface.initialize();
+                            
+                            // Hide initialization screen
+                            const initScreen = document.querySelector('.initialization-screen');
+                            if (initScreen) {
+                                initScreen.style.display = 'none';
+                            }
+
+                        } catch (error) {
+                            console.error('Quiz initialization failed:', error);
+                            showGlobalError(error);
+                            
+                            initBtn.disabled = false;
+                            initBtn.textContent = 'Tekrar Dene';
+                        }
+                    });
+                }
+
+                console.log('Quiz page initialized');
+
+            } catch (error) {
+                console.error('Quiz page initialization failed:', error);
+                showGlobalError(error);
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (quizInterface) {
+                quizInterface.cleanup().catch(error => {
+                    console.error('Cleanup error:', error);
+                });
+            }
+        });
+
+        function showGlobalError(error) {
+            const container = document.getElementById('quiz-container');
+            if (!container) return;
+
+            let errorMessage = 'Bir hata oluştu';
+            
+            if (error && typeof error === 'object') {
+                errorMessage = error.message || error.toString();
+            } else if (typeof error === 'string') {
+                errorMessage = error;
+            }
+
+            container.innerHTML = `
+                <div class="error-screen">
+                    <div class="error-content">
+                        <div class="error-icon">⚠️</div>
+                        <h2 class="error-title">Hata Oluştu</h2>
+                        <p class="error-message">${errorMessage}</p>
+                        <div class="error-actions">
+                            <button class="btn btn-primary" onclick="window.location.reload()">
+                                Sayfayı Yenile
+                            </button>
+                            <a href="/" class="btn btn-outline">
+                                Ana Sayfaya Dön
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+    
+    <style>
+        /* Quiz-specific styles */
+        .header {
+            background-color: var(--color-surface);
+            border-bottom: 1px solid var(--color-outline);
+            padding: var(--space-4) 0;
+        }
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: var(--space-4);
+        }
+        
+        .logo-link {
+            text-decoration: none;
+            color: inherit;
+        }
+        
+        .logo-text {
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-bold);
+            margin: 0;
+        }
+        
+        .header-nav {
+            display: flex;
+            gap: var(--space-4);
+        }
+        
+        .nav-link {
+            font-weight: var(--font-weight-medium);
+        }
+        
+        .main {
+            padding: var(--space-8) 0;
+            min-height: calc(100vh - 200px);
+        }
+        
+        .quiz-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        /* Initialization Screen */
+        .initialization-screen {
+            text-align: center;
+            padding: var(--space-12);
+        }
+        
+        .init-content {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .init-icon {
+            font-size: 4rem;
+            margin-bottom: var(--space-6);
+        }
+        
+        .init-title {
+            font-size: var(--font-size-3xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-4);
+        }
+        
+        .init-description {
+            font-size: var(--font-size-lg);
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-8);
+        }
+        
+        .init-requirements {
+            background-color: var(--color-surface-variant);
+            padding: var(--space-6);
+            border-radius: var(--radius-xl);
+            margin-bottom: var(--space-8);
+            text-align: left;
+        }
+        
+        .init-requirements h3 {
+            margin-bottom: var(--space-4);
+            font-size: var(--font-size-lg);
+        }
+        
+        .init-requirements ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .init-requirements li {
+            padding: var(--space-2) 0;
+            font-size: var(--font-size-base);
+        }
+        
+        /* Quiz Interface Styles */
+        .quiz-interface {
+            position: relative;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-3) var(--space-4);
+            background-color: var(--color-surface-variant);
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--space-6);
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--color-gray-400);
+        }
+        
+        .status-indicator.status-connected {
+            background-color: var(--color-success);
+        }
+        
+        .status-indicator.status-connecting,
+        .status-indicator.status-reconnecting {
+            background-color: var(--color-warning);
+            animation: pulse var(--duration-1000) infinite;
+        }
+        
+        .status-indicator.status-failed,
+        .status-indicator.status-disconnected {
+            background-color: var(--color-error);
+        }
+        
+        .status-text {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+        
+        .question-container {
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-outline);
+            border-radius: var(--radius-xl);
+            padding: var(--space-8);
+            margin-bottom: var(--space-6);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-6);
+        }
+        
+        .question-number {
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-primary-600);
+        }
+        
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-6);
+            padding: var(--space-6);
+            background-color: var(--color-surface-variant);
+            border-radius: var(--radius-xl);
+            margin-bottom: var(--space-6);
+        }
+        
+        .vad-indicator {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+        
+        .vad-circle {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: var(--color-gray-400);
+            transition: background-color var(--duration-150) var(--ease-in-out);
+        }
+        
+        .vad-circle.speaking {
+            background-color: var(--color-success);
+            animation: pulse var(--duration-500) infinite;
+        }
+        
+        .audio-level {
+            flex: 1;
+            max-width: 200px;
+            height: 8px;
+            background-color: var(--color-gray-200);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+        }
+        
+        .level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--color-success), var(--color-warning), var(--color-error));
+            border-radius: var(--radius-full);
+            transition: width var(--duration-100) var(--ease-out);
+            width: 0%;
+        }
+        
+        .quiz-actions {
+            display: flex;
+            gap: var(--space-4);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .status-messages {
+            margin-top: var(--space-6);
+        }
+        
+        .status-message {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-4);
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--space-3);
+        }
+        
+        .status-message-info {
+            background-color: var(--color-info);
+            color: white;
+        }
+        
+        .status-message-warning {
+            background-color: var(--color-warning);
+            color: white;
+        }
+        
+        .status-message-error {
+            background-color: var(--color-error);
+            color: white;
+        }
+        
+        .message-close {
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: var(--font-size-lg);
+            cursor: pointer;
+            padding: var(--space-1);
+            border-radius: var(--radius-sm);
+            transition: background-color var(--duration-150) var(--ease-in-out);
+        }
+        
+        .message-close:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-xl);
+            z-index: var(--z-index-modal);
+        }
+        
+        .loading-content {
+            text-align: center;
+        }
+        
+        .loading-text {
+            margin-top: var(--space-4);
+            color: var(--color-text-secondary);
+        }
+        
+        /* Quiz Results */
+        .quiz-results {
+            text-align: center;
+            padding: var(--space-8);
+        }
+        
+        .quiz-results h3 {
+            font-size: var(--font-size-3xl);
+            margin-bottom: var(--space-6);
+        }
+        
+        .results-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: var(--space-4);
+            margin-bottom: var(--space-8);
+        }
+        
+        .stat {
+            background-color: var(--color-surface-variant);
+            padding: var(--space-4);
+            border-radius: var(--radius-lg);
+            text-align: center;
+        }
+        
+        .stat-label {
+            display: block;
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-2);
+        }
+        
+        .stat-value {
+            display: block;
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary-600);
+        }
+        
+        .results-actions {
+            display: flex;
+            gap: var(--space-4);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        /* Error Screen */
+        .error-screen {
+            text-align: center;
+            padding: var(--space-12);
+        }
+        
+        .error-content {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .error-icon {
+            font-size: 4rem;
+            margin-bottom: var(--space-6);
+        }
+        
+        .error-title {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-4);
+            color: var(--color-error);
+        }
+        
+        .error-message {
+            font-size: var(--font-size-lg);
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-8);
+        }
+        
+        .error-actions {
+            display: flex;
+            gap: var(--space-4);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .main {
+                padding: var(--space-6) 0;
+            }
+            
+            .quiz-container {
+                padding: 0 var(--space-4);
+            }
+            
+            .header-content {
+                text-align: center;
+            }
+            
+            .question-header {
+                flex-direction: column;
+                gap: var(--space-4);
+                text-align: center;
+            }
+            
+            .audio-controls {
+                flex-direction: column;
+                gap: var(--space-4);
+            }
+            
+            .quiz-actions {
+                flex-direction: column;
+            }
+            
+            .results-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Pulse animation */
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .pulse {
+            animation: pulse var(--duration-1000) ease-in-out infinite;
+        }
+    </style>
+</body>
+</html>
