@@ -89,3 +89,4 @@ WHERE k.is_active = 1;
 
 -- Optimize the FTS index for better performance
 INSERT INTO knowledge_fts(knowledge_fts) VALUES('optimize');
+

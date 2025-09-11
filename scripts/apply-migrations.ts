@@ -150,3 +150,4 @@ if (import.meta.main) {
 
 // Export for use in other scripts
 export { getMigrationFiles, createCombinedMigration };
+

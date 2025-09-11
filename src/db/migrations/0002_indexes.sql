@@ -177,3 +177,4 @@ CREATE INDEX IF NOT EXISTS idx_consent_records_active
 
 CREATE INDEX IF NOT EXISTS idx_system_settings_category 
   ON system_settings(category);
+

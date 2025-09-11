@@ -49,3 +49,4 @@ export class QRCodeGenerator {
 }
 
 export default QRCodeGenerator;
+

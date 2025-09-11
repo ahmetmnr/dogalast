@@ -136,3 +136,4 @@ INSERT OR IGNORE INTO system_settings (key, value, description, category, is_env
 ('LOG_TO_DATABASE', 'true', 'Database logging aktif mi', 'logging', 0),
 ('LOG_REQUEST_BODY', 'false', 'Request body logla (dikkat: sensitive data)', 'logging', 0),
 ('LOG_RESPONSE_BODY', 'false', 'Response body logla (dikkat: sensitive data)', 'logging', 0);
+

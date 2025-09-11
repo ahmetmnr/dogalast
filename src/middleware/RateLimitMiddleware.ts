@@ -435,3 +435,4 @@ export class RateLimitMiddleware extends BaseMiddleware {
  * Export singleton instance handler
  */
 export const rateLimitMiddleware = RateLimitMiddleware.getInstance().handle.bind(RateLimitMiddleware.getInstance());
+

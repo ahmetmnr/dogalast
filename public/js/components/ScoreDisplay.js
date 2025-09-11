@@ -276,3 +276,4 @@ export class ScoreDisplay {
 }
 
 export default ScoreDisplay;
+

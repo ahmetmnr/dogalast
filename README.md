@@ -172,3 +172,4 @@ Sorularınız için issue açabilir veya [email@example.com](mailto:email@exampl
 ---
 
 <p align="center">Made with ❤️ for a sustainable future 🌍</p>
+

@@ -478,3 +478,4 @@ export class PermissionManager {
     return currentPermissions.filter(p => !removeSet.has(p as Permission));
   }
 }
+

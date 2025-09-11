@@ -335,3 +335,4 @@ export type NewConsentRecord = typeof consentRecords.$inferInsert;
 
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type NewSystemSetting = typeof systemSettings.$inferInsert;
+

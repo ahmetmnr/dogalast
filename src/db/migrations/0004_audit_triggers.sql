@@ -150,3 +150,4 @@ BEGIN
   SET withdrawal_date = unixepoch() 
   WHERE id = NEW.id;
 END;
+

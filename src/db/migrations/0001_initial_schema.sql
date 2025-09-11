@@ -204,3 +204,4 @@ CREATE TABLE IF NOT EXISTS system_settings (
   is_environment_variable INTEGER DEFAULT 0 CHECK (is_environment_variable IN (0, 1)),
   updated_at INTEGER DEFAULT (unixepoch()) NOT NULL
 );
+

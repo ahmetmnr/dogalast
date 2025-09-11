@@ -411,3 +411,4 @@ export class SecurityMiddleware extends BaseMiddleware {
  * Export static handler for easy middleware registration
  */
 export const securityMiddleware = SecurityMiddleware.prototype.handle.bind(new SecurityMiddleware());
+

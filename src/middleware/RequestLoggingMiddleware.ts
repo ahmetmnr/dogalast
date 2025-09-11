@@ -399,3 +399,4 @@ export const requestLogging = () => {
   const middleware = new RequestLoggingMiddleware();
   return middleware.create();
 };
+

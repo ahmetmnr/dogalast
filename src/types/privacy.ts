@@ -469,3 +469,4 @@ export interface DataBreachNotification {
   /** Subject notification date */
   subjectNotificationDate?: Date;
 }
+
