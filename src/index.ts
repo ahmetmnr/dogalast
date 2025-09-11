@@ -11,6 +11,15 @@ import { prettyJSON } from 'hono/pretty-json';
 // Configuration imports
 import { env, createLogger, isDevelopment } from '@/config/environment';
 
+// Initialize logger
+const appLogger = createLogger('main');
+appLogger.info('Starting Zero Waste Quiz application...');
+appLogger.debug('Environment loaded:', { 
+  nodeEnv: env.NODE_ENV, 
+  port: env.PORT,
+  logLevel: env.LOG_LEVEL 
+});
+
 // Type imports
 import type { ApiResponse } from '@/types/api';
 import type { D1Database } from '@cloudflare/workers-types';
