@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { PromptBuilder } from '@/services/PromptBuilder'
 
 // Services
 import { SecureToolHandler } from '@/services/SecureToolHandler'
@@ -135,8 +136,8 @@ router.get(
 )
 
 // Export router
-// Realtime token endpoint
-router.get('/realtime/token', async (c: AppContext) => {
+// Ephemeral token endpoint for OpenAI Realtime API
+router.post('/realtime/ephemeral-token', async (c: AppContext) => {
   try {
     const sessionId = c.req.query('sessionId')
     if (!sessionId) {
@@ -155,10 +156,23 @@ router.get('/realtime/token', async (c: AppContext) => {
         'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-realtime-preview-2025-06-03',
-        voice: 'alloy'
-      })
+          body: JSON.stringify({
+            model: 'gpt-4o-realtime-preview-2025-06-03',
+            voice: 'alloy',
+            instructions: PromptBuilder.buildSystemInstructions(),
+            modalities: ['text', 'audio'],
+            input_audio_format: 'pcm16',
+            output_audio_format: 'pcm16',
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 500,
+              create_response: true,
+              interrupt_response: true
+            },
+            tools: PromptBuilder.getToolsSchema()
+          })
     })
 
     if (!response.ok) {

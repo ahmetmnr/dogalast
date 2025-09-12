@@ -9,3 +9,4 @@ console.log(`✅ ${result.changes} active sessions cleared!`);
 // Show current sessions
 const sessions = db.query('SELECT id, participant_id, status FROM quiz_sessions ORDER BY started_at DESC LIMIT 5').all();
 console.log('Recent sessions:', sessions);
+

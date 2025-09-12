@@ -118,3 +118,4 @@ console.log(`\n🎉 Toplam ${added} soru eklendi!`);
 // Kontrol et
 const count = db.query('SELECT COUNT(*) as count FROM questions WHERE is_active = 1').get();
 console.log(`📊 Database'de toplam ${count.count} aktif soru var`);
+

@@ -22,9 +22,9 @@ export class WebRTCClient {
     try {
       console.log('🔌 Starting WebRTC connection...');
       
-      // Get ephemeral token from backend (correct port)
-      const tokenResponse = await fetch('http://localhost:8787/api/quiz/realtime/token?sessionId=' + Date.now(), {
-        method: 'GET',
+      // Get ephemeral token from backend (correct endpoint)
+      const tokenResponse = await fetch('http://localhost:8787/api/quiz/realtime/ephemeral-token?sessionId=' + Date.now(), {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('zero_waste_auth_token')}`,
           'Content-Type': 'application/json'

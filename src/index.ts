@@ -111,6 +111,16 @@ app.onError((error, c) => {
   }, 500)
 })
 
+// Utility function for binary audio conversion
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 appLogger.info('Zero Waste Quiz application started successfully')
 
 // Bun server configuration with WebSocket support
@@ -143,10 +153,25 @@ export default {
     return app.fetch(req, server);
   },
   websocket: {
-    message(ws: any, message: string) {
+    message(ws: any, message: string | ArrayBuffer) {
       try {
-        const data = JSON.parse(message);
-        appLogger.info(`[websocket] Message from ${ws.data?.userId}:`, data);
+        let data: any;
+        
+        // Handle both string (JSON) and binary (PCM16) messages
+        if (typeof message === 'string') {
+          data = JSON.parse(message);
+          appLogger.info(`[websocket] JSON message from ${ws.data?.userId}:`, data.type);
+        } else {
+          // Binary PCM16 audio data
+          appLogger.info(`[websocket] Binary audio from ${ws.data?.userId}:`, message.byteLength, 'bytes');
+          
+          // Convert to base64 for OpenAI
+          const base64Audio = arrayBufferToBase64(message);
+          data = {
+            type: 'input_audio_buffer.append',
+            audio: base64Audio
+          };
+        }
         
         // Handle different message types
         switch (data.type) {
@@ -256,12 +281,18 @@ export default {
         openaiWs.onopen = () => {
           appLogger.info(`[websocket] OpenAI connection established for user ${userId}`);
           
-          // Configure OpenAI session
+          // Configure OpenAI session with quiz-specific instructions
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
               modalities: ['text', 'audio'],
-              instructions: 'Sen Türkçe konuşan bir sıfır atık yarışması asistanısın. Soruları net ve anlaşılır şekilde oku. Kullanıcı cevaplarını değerlendir.',
+              instructions: `Sen bir sıfır atık yarışması asistanısın. Görevin:
+1. Kullanıcıya soruları net ve anlaşılır Türkçe ile okumak
+2. Kullanıcının sesli cevaplarını dinlemek ve değerlendirmek
+3. Doğru/yanlış feedback vermek
+4. Yarışma skorunu takip etmek
+
+Şu anda aktif soru var. Kullanıcı "soruyu oku" dediğinde mevcut soruyu sesli olarak oku.`,
               voice: 'alloy',
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
@@ -269,13 +300,87 @@ export default {
                 type: 'server_vad',
                 threshold: 0.5,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 500
-              }
+                silence_duration_ms: 500,
+                create_response: true,
+                interrupt_response: true
+              },
+              tools: [
+                {
+                  type: "function",
+                  name: "read_current_question",
+                  description: "Mevcut aktif soruyu sesli olarak oku",
+                  parameters: {
+                    type: "object",
+                    properties: {},
+                    additionalProperties: false
+                  }
+                },
+                {
+                  type: "function", 
+                  name: "evaluate_answer",
+                  description: "Kullanıcının cevabını değerlendir ve puan ver",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      answer: { type: "string", description: "Kullanıcının cevabı" },
+                      isCorrect: { type: "boolean", description: "Cevap doğru mu" },
+                      points: { type: "number", description: "Kazanılan puan" }
+                    },
+                    required: ["answer", "isCorrect", "points"]
+                  }
+                }
+              ]
             }
           }));
+          
+          // Immediately ask OpenAI to read the current question
+          setTimeout(() => {
+            openaiWs.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: {
+                type: 'message',
+                role: 'user',
+                content: [{
+                  type: 'input_text',
+                  text: 'Mevcut soruyu sesli olarak oku lütfen.'
+                }]
+              }
+            }));
+            
+            openaiWs.send(JSON.stringify({
+              type: 'response.create',
+              response: { modalities: ['text', 'audio'] }
+            }));
+          }, 1000);
         };
         
         openaiWs.onmessage = (event) => {
+          // Parse OpenAI message for timing events
+          try {
+            const openaiData = JSON.parse(event.data);
+            
+            // Record timing events
+            switch (openaiData.type) {
+              case 'response.audio.delta':
+                console.log('🔊 TTS audio chunk');
+                break;
+                
+              case 'response.audio.done':
+                console.log('🔊 TTS completed - should record timing');
+                break;
+                
+              case 'input_audio_buffer.speech_started':
+                console.log('🎤 User speech started - should record timing');
+                break;
+                
+              case 'conversation.item.input_audio_transcription.completed':
+                console.log('📝 Answer transcribed - should record timing');
+                break;
+            }
+          } catch (error) {
+            // Not JSON, might be binary
+          }
+          
           // Forward OpenAI messages to client
           ws.send(event.data);
         };
