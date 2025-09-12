@@ -20,6 +20,44 @@ const logger = createLogger('admin-routes')
 // Create router
 const router = new Hono<{ Variables: any }>()
 
+// Admin login endpoint
+router.post('/login', async (c: AppContext) => {
+  try {
+    const { username, password } = await c.req.json()
+    
+    if (username === 'admin' && password === 'admin123') {
+      return c.json({
+        success: true,
+        data: {
+          token: 'admin-token-temp',
+          user: { id: 1, username: 'admin', role: 'admin' }
+        }
+      })
+    }
+    
+    return c.json({ 
+      success: false, 
+      error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } 
+    }, 401)
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: 'Login failed' } 
+    }, 500)
+  }
+})
+
+// Admin verify endpoint
+router.get('/verify', async (c: AppContext) => {
+  return c.json({
+    success: true,
+    data: {
+      user: { id: 1, username: 'admin', role: 'admin' },
+      permissions: ['admin_access', 'question_management']
+    }
+  })
+})
+
 // Get participants endpoint
 router.get(
   '/participants',

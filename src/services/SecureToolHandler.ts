@@ -17,6 +17,7 @@ import { ScoringService } from './ScoringService';
 import { PrivacyService } from './PrivacyService';
 import { KnowledgeService } from './KnowledgeService';
 import { Logger } from '@/utils/logger';
+import { AppError, ErrorCode } from '@/types/errors';
 
 import type { DatabaseInstance } from '@/db/connection';
 import type { UserContext } from '@/middleware/RoleMiddleware';
@@ -49,13 +50,13 @@ interface IdempotencyRecord {
 /**
  * Tool execution error
  */
-export class ToolExecutionError extends Error {
+export class ToolExecutionError extends AppError {
   constructor(
     message: string,
-    public code: string = 'TOOL_EXECUTION_ERROR',
-    public statusCode: number = 400
+    code: string = 'TOOL_EXECUTION_ERROR',
+    statusCode: number = 400
   ) {
-    super(message);
+    super(code, message, statusCode);
     this.name = 'ToolExecutionError';
   }
 }
@@ -254,6 +255,11 @@ export class SecureToolHandler {
    */
   private async executeStartQuiz(): Promise<any> {
     // Check for existing active session
+    console.log('Checking for active session:', {
+      userId: this.user.id,
+      parsedUserId: parseInt(this.user.id)
+    });
+    
     const existingSessionResult = await this.db
       .select()
       .from(quizSessions)
@@ -266,11 +272,22 @@ export class SecureToolHandler {
       .limit(1);
 
     if (existingSessionResult.length > 0) {
-      throw new ToolExecutionError(
-        'Zaten aktif bir yarışma oturumunuz var',
-        'ACTIVE_SESSION_EXISTS',
-        409
-      );
+      console.log('Existing active session found, returning it:', {
+        userId: this.user.id,
+        parsedUserId: parseInt(this.user.id),
+        existingSession: existingSessionResult[0]
+      });
+      
+      // Return existing session instead of throwing error
+      const existingSession = existingSessionResult[0];
+      
+      return {
+        sessionId: existingSession.id,
+        currentQuestion: null, // Will be loaded separately
+        totalScore: existingSession.totalScore,
+        questionIndex: existingSession.currentQuestionIndex,
+        questionsAnswered: existingSession.questionsAnswered
+      };
     }
 
     // Create new session
@@ -332,7 +349,7 @@ export class SecureToolHandler {
       .update(quizSessions)
       .set({
         currentQuestionIndex: nextIndex,
-        lastActivityAt: sql`(unixepoch())`,
+        lastActivityAt: new Date(),
       })
       .where(eq(quizSessions.id, sessionId));
 
@@ -450,7 +467,7 @@ export class SecureToolHandler {
     await this.db
       .update(sessionQuestions)
       .set({
-        answeredAt: sql`(unixepoch())`,
+        answeredAt: new Date(),
         userAnswer: args.answer,
         isCorrect: validationResult.isCorrect,
         pointsEarned: scoreResult.finalScore,
@@ -464,7 +481,7 @@ export class SecureToolHandler {
       .update(quizSessions)
       .set({
         totalScore: sql`${quizSessions.totalScore} + ${scoreResult.finalScore}`,
-        lastActivityAt: sql`(unixepoch())`,
+        lastActivityAt: new Date(),
       })
       .where(eq(quizSessions.id, (questionInfo as any).sessionId));
 
@@ -497,8 +514,8 @@ export class SecureToolHandler {
       .update(quizSessions)
       .set({
         status: 'completed',
-        completedAt: sql`(unixepoch())`,
-        lastActivityAt: sql`(unixepoch())`,
+        completedAt: new Date(),
+        lastActivityAt: new Date(),
       })
       .where(eq(quizSessions.id, sessionId));
 

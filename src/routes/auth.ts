@@ -137,7 +137,7 @@ router.post(
 
 // Admin login endpoint
 router.post(
-  '/admin/login',
+  '/admin-login',
   ValidationMiddleware.validateBody(schemas.adminLogin),
   async (c: AppContext) => {
     try {

@@ -118,8 +118,8 @@ export class QuizInterface {
     try {
       this.showLoading('Yarışma başlatılıyor...');
 
-      // Start quiz via API
-      const response = await api.tools.startQuiz();
+      // Start quiz via API - sessionId optional for first call
+      const response = await api.tools.startQuiz(this.quizState.sessionId || undefined);
 
       if (response.success && response.data) {
         this.quizState.sessionId = response.data.sessionId;
@@ -128,9 +128,13 @@ export class QuizInterface {
         this.quizState.questionIndex = response.data.questionIndex;
         this.quizState.isActive = true;
         this.quizState.currentSessionQuestionId = response.data.currentQuestion?.sessionQuestionId;
+        
+        // Save sessionId to localStorage
+        localStorage.setItem('currentSessionId', response.data.sessionId);
 
-        // Initialize OpenAI Realtime connection
-        await this.initializeRealtimeConnection();
+        // Initialize WebRTC connection to OpenAI Realtime API
+        await this.initializeWebRTCConnection();
+        console.log('✅ WebRTC OpenAI connection initialized');
 
         // Start audio recording
         await this.audioManager.startRecording();
@@ -287,13 +291,69 @@ export class QuizInterface {
   /**
    * Initialize OpenAI Realtime connection
    */
-  private async initializeRealtimeConnection(): Promise<void> {
+  private async initializeWebRTCConnection(): Promise<void> {
+    if (!this.quizState.sessionId) {
+      throw new Error('Session ID required for WebRTC connection');
+    }
+    
+    const { WebRTCClient } = await import('../core/WebRTCClient');
+    
+    const webrtcClient = new WebRTCClient({
+      onDataChannelOpen: () => {
+        console.log('✅ WebRTC ready, asking OpenAI to read question');
+        
+        // Send question to OpenAI to be read aloud
+        if (this.quizState.currentQuestion) {
+          const questionText = `Soru ${this.quizState.questionIndex + 1}: ${this.quizState.currentQuestion.text}. Seçenekler: ${this.quizState.currentQuestion.options.join(', ')}`;
+          
+          webrtcClient.sendEvent({
+            type: 'conversation.item.create',
+            item: {
+              type: 'message',
+              role: 'user',
+              content: [{
+                type: 'input_text',
+                text: questionText
+              }]
+            }
+          });
+          
+          webrtcClient.sendEvent({
+            type: 'response.create',
+            response: { modalities: ['text', 'audio'] }
+          });
+        }
+      },
+      onEventReceived: async (event) => {
+        switch (event.type) {
+          case 'conversation.item.input_audio_transcription.completed':
+            if (event.transcript) {
+              console.log('🗣️ User answer:', event.transcript);
+              await this.handleUserAnswer(event.transcript);
+            }
+            break;
+            
+          case 'response.audio.done':
+            console.log('🔊 OpenAI finished speaking');
+            break;
+        }
+      },
+      onError: (error) => {
+        console.error('WebRTC error:', error);
+      }
+    });
+
+    await webrtcClient.start();
+    (this as any).webrtcClient = webrtcClient;
+  }
+
+  private async initializeRealtimeConnectionOLD(): Promise<void> {
     if (!this.quizState.sessionId) {
       throw new Error('Session ID required for realtime connection');
     }
 
     const realtimeConfig: RealtimeConfig = {
-      model: 'gpt-4o-realtime-preview-2024-12-17',
+      model: 'gpt-4o-realtime-preview-2025-06-03',
       voice: 'alloy',
       sessionId: this.quizState.sessionId,
       onAudioReceived: (audioData: ArrayBuffer) => {
@@ -434,12 +494,12 @@ export class QuizInterface {
       
       // Mark TTS start
       if (question.sessionQuestionId) {
-        await api.tools.markTTSEnd(question.sessionQuestionId, Date.now());
+        await api.tools.markTTSEnd(question.sessionQuestionId, Date.now(), this.quizState.sessionId || undefined);
       }
 
-      // Send question to OpenAI for TTS
+      // Use browser's built-in TTS for question reading
       const questionText = `Soru ${this.quizState.questionIndex + 1}: ${question.text}`;
-      await this.realtimeClient.sendTextMessage(questionText);
+      this.speakText(questionText);
 
       console.log('Question presented via TTS:', questionText);
 
@@ -495,14 +555,153 @@ export class QuizInterface {
   // ============================================================================
 
   /**
+   * Speak text using browser's built-in TTS
+   */
+  private speakText(text: string): void {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'tr-TR';
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+      utterance.volume = 0.8;
+      
+      utterance.onstart = () => {
+        console.log('🔊 TTS started:', text);
+      };
+      
+      utterance.onend = () => {
+        console.log('🔊 TTS completed');
+        // Start listening for user answer
+        this.startListeningForAnswer();
+        this.updateUI();
+      };
+      
+      utterance.onerror = (error) => {
+        console.error('🚨 TTS error:', error);
+      };
+      
+      speechSynthesis.speak(utterance);
+    } else {
+      console.warn('⚠️ Speech synthesis not supported');
+    }
+  }
+
+  /**
+   * Start listening for user answer using browser Speech Recognition
+   */
+  private startListeningForAnswer(): void {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      console.warn('⚠️ Speech recognition not supported');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'tr-TR';
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      console.log('🎤 Listening for answer...');
+      this.quizState.isWaitingForAnswer = true;
+      this.updateUI();
+    };
+
+    recognition.onresult = (event: any) => {
+      const result = event.results[event.results.length - 1];
+      const transcript = result.transcript;
+      
+      if (result.isFinal) {
+        console.log('🗣️ User answer:', transcript);
+        this.handleUserAnswer(transcript);
+      } else {
+        console.log('🗣️ Interim result:', transcript);
+      }
+    };
+
+    recognition.onerror = (error: any) => {
+      console.error('🚨 Speech recognition error:', error);
+      this.quizState.isWaitingForAnswer = false;
+      this.updateUI();
+    };
+
+    recognition.onend = () => {
+      console.log('🎤 Speech recognition ended');
+      this.quizState.isWaitingForAnswer = false;
+      this.updateUI();
+    };
+
+    // Start recognition with timeout
+    recognition.start();
+    
+    // Auto-stop after 30 seconds
+    setTimeout(() => {
+      recognition.stop();
+    }, 30000);
+  }
+
+  /**
+   * Handle user's spoken answer
+   */
+  private async handleUserAnswer(transcript: string): Promise<void> {
+    try {
+      console.log('📝 Processing answer:', transcript);
+      
+      if (!this.quizState.currentQuestion) {
+        throw new Error('No active question');
+      }
+
+      // Submit answer via API
+      const response = await api.tools.submitAnswer(
+        this.quizState.sessionId || '',
+        this.quizState.currentQuestion.sessionQuestionId,
+        transcript
+      );
+
+      if (response.success) {
+        console.log('✅ Answer submitted successfully');
+        // Show feedback and proceed to next question
+        this.showAnswerFeedback(response.data);
+        
+        // Wait 3 seconds then next question
+        setTimeout(async () => {
+          await this.nextQuestion();
+        }, 3000);
+      }
+
+    } catch (error) {
+      console.error('❌ Failed to process answer:', error);
+      this.handleError(error);
+    }
+  }
+
+  /**
    * Handle realtime audio from OpenAI
    */
   private async handleRealtimeAudio(audioData: ArrayBuffer): Promise<void> {
     try {
-      // Play audio response
+      console.log('🔊 Playing realtime audio, size:', audioData.byteLength);
+      
+      // For testing, play a simple beep sound
       const audioContext = this.audioManager.getAudioContext();
       if (audioContext) {
-        await AudioUtils.playAudio(audioContext, audioData, 24000);
+        // Create a simple test tone
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A note
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+        
+        console.log('🔊 Test tone played');
       }
     } catch (error) {
       console.error('Failed to play realtime audio:', error);

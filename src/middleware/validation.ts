@@ -24,7 +24,7 @@ export const schemas = {
   toolDispatch: z.object({
     tool: z.string().min(1),
     args: z.record(z.any()).optional().default({}),
-    sessionId: z.string().uuid().optional(),
+    sessionId: z.string().uuid().nullable().optional(),
     idempotencyKey: z.string().optional()
   }),
 

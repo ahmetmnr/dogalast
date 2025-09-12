@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import path from 'path'
 
 export default defineConfig({
+  // Root directory
+  root: 'public',
+  
   // Path aliases configuration
   resolve: {
     alias: {
@@ -62,19 +65,19 @@ export default defineConfig({
     // Proxy configuration for backend API
     proxy: {
       '/api': {
-        target: 'http://localhost:8787',
+        target: 'http://localhost:8788',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path
       },
       '/ws': {
-        target: 'ws://localhost:8787',
+        target: 'ws://localhost:8788',
         ws: true,
         changeOrigin: true
       },
       // Admin routes
       '/admin/api': {
-        target: 'http://localhost:8787',
+        target: 'http://localhost:8788',
         changeOrigin: true,
         secure: false
       }
@@ -113,7 +116,11 @@ export default defineConfig({
   // Optimization
   optimizeDeps: {
     include: ['zod', 'jose'],
-    exclude: ['@openai/realtime-api-beta']
+    exclude: ['@openai/realtime-api-beta'],
+    entries: [
+      'public/**/*.html',
+      'public/**/*.ts'
+    ]
   },
   
   // Plugin configuration

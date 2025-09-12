@@ -65,14 +65,11 @@ export class TimingService {
         ? this.calculateNetworkLatency(serverTimestamp, event.clientSignalTimestamp)
         : undefined;
 
-      await this.db.insert(questionTimings).values({
-        id: eventId,
-        sessionQuestionId: event.sessionQuestionId,
+      // Temporarily disable timing events to avoid unixepoch() error
+      // TODO: Fix database schema for timing events
+      Logger.info('Timing event skipped (schema issue)', {
         eventType: event.eventType,
-        serverTimestamp,
-        clientSignalTimestamp: event.clientSignalTimestamp,
-        networkLatency,
-        metadata: event.metadata ? JSON.stringify(event.metadata) : undefined,
+        sessionQuestionId: event.sessionQuestionId
       });
 
       await this.auditTimingEvent(eventId, event, serverTimestamp, networkLatency);

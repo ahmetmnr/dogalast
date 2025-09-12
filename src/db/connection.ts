@@ -7,7 +7,7 @@ export type DatabaseInstance = ReturnType<typeof createDatabaseConnection>
 
 export function createDatabaseConnection(env: any) {
   // For local development with Bun, use SQLite directly
-  if (process.env['NODE_ENV'] === 'development' && !env.DB) {
+  if (!env.DB || process.env['NODE_ENV'] === 'development') {
     const dbPath = process.env['DATABASE_URL'] || './.wrangler/state/v3/d1/miniflare-D1DatabaseObject/zero-waste-quiz-dev.sqlite'
     const sqlite = new Database(dbPath)
     return drizzleSqlite(sqlite, { schema })

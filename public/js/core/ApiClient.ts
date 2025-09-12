@@ -261,8 +261,8 @@ export class APIClient {
       } catch (error) {
         lastError = error as Error;
 
-        // Don't retry on client errors (4xx)
-        if (error instanceof APIClientError && error.statusCode >= 400 && error.statusCode < 500) {
+        // Don't retry on client errors (4xx) or conflict errors (409)
+        if (error instanceof APIClientError && (error.statusCode >= 400 && error.statusCode < 500)) {
           throw error;
         }
 
@@ -407,13 +407,13 @@ export const api = {
   // Authentication
   auth: {
     register: (data: RegistrationRequest) => 
-      apiClient.post<RegistrationResponse>('/api/register', data),
+      apiClient.post<RegistrationResponse>('/api/auth/register', data),
 
     adminLogin: (data: AdminLoginRequest) => 
-      apiClient.post<AdminLoginResponse>('/api/admin/login', data),
+      apiClient.post<AdminLoginResponse>('/api/auth/admin-login', data),
 
     getEphemeralToken: (sessionId: string) => 
-      apiClient.get(`/api/realtime/token?sessionId=${sessionId}`),
+      apiClient.get(`/api/quiz/realtime/token?sessionId=${sessionId}`),
 
     refreshToken: (sessionId: string) => 
       apiClient.post('/api/realtime/refresh-token', { sessionId }),
@@ -441,20 +441,21 @@ export const api = {
   tools: {
     dispatch: <T = any>(request: ToolDispatchRequest, idempotencyKey?: string) => {
       const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined;
-      return apiClient.post<T>('/api/tools/dispatch', request, { headers });
+      return apiClient.post<T>('/api/quiz/tools/dispatch', request, { headers });
     },
 
     // Convenience methods for specific tools
-    startQuiz: () => 
-      api.tools.dispatch({ tool: 'startQuiz', args: {} }),
+    startQuiz: (sessionId?: string) => 
+      api.tools.dispatch({ tool: 'startQuiz', args: {}, sessionId }),
 
     nextQuestion: (sessionId: string) => 
       api.tools.dispatch({ tool: 'nextQuestion', args: {}, sessionId }),
 
-    markTTSEnd: (sessionQuestionId: string, clientTimestamp?: number) => 
+    markTTSEnd: (sessionQuestionId: string, clientTimestamp?: number, sessionId?: string) => 
       api.tools.dispatch({
         tool: 'markTTSEnd',
-        args: { sessionQuestionId, clientTimestamp }
+        args: { sessionQuestionId, clientTimestamp },
+        sessionId
       }),
 
     markSpeechStart: (sessionQuestionId: string, vadThreshold: number, clientTimestamp?: number) => 

@@ -3,7 +3,7 @@
  * WebRTC-based real-time audio communication with OpenAI
  */
 
-import { api } from './ApiClient';
+import { apiClient } from './ApiClient';
 
 // ============================================================================
 // Types and Interfaces
@@ -277,15 +277,11 @@ export class RealtimeClient {
    */
   private async refreshEphemeralToken(): Promise<void> {
     try {
-      const response = await api.auth.getEphemeralToken(this.config.sessionId);
+      const response = await apiClient.get(`/api/quiz/realtime/token?sessionId=${this.config.sessionId}`);
 
       if (response.success && response.data) {
-        interface TokenResponse {
-          clientSecret: string;
-          expiresAt: string;
-        }
-        this.ephemeralToken = (response.data as TokenResponse).clientSecret;
-        this.tokenExpiresAt = new Date((response.data as TokenResponse).expiresAt).getTime();
+        this.ephemeralToken = (response.data as any).token;
+        this.tokenExpiresAt = (response.data as any).expiresIn ? (Date.now() + (response.data as any).expiresIn * 1000) : (Date.now() + 3600000);
 
         // Schedule token refresh at 75% of expiry time
         const now = Date.now();
@@ -325,7 +321,18 @@ export class RealtimeClient {
    */
   private async establishWebSocketConnection(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wsUrl = `wss://api.openai.com/v1/realtime?model=${this.config.model}`;
+      // OpenAI Realtime API WebSocket URL (authorization in first message)
+      if (!this.ephemeralToken) {
+        throw new Error('No ephemeral token available');
+      }
+      
+      // Connect to backend WebSocket proxy with JWT token (not ephemeral token)
+      const jwtToken = localStorage.getItem('zero_waste_auth_token');
+      if (!jwtToken) {
+        throw new Error('No JWT token found');
+      }
+      
+      const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//localhost:8787/ws?token=${encodeURIComponent(jwtToken)}&type=openai_proxy`;
 
       this.ws = new WebSocket(wsUrl);
 
@@ -345,8 +352,9 @@ export class RealtimeClient {
         clearTimeout(timeout);
         console.log('OpenAI WebSocket connection opened');
 
-        // Send authorization
+        // Send authorization first, then session config
         if (this.ws && this.ephemeralToken) {
+          // First, send authorization
           this.ws.send(JSON.stringify({
             type: 'session.update',
             session: {
@@ -365,7 +373,8 @@ export class RealtimeClient {
                 silence_duration_ms: 500
               },
               tools: []
-            }
+            },
+            authorization: `Bearer ${this.ephemeralToken}`
           }));
         }
 
