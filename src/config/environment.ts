@@ -50,7 +50,7 @@ const envSchema = z.object({
   SESSION_TIMEOUT: z.coerce.number().default(86400000), // 24h in ms
   
   // OpenAI Realtime
-  OPENAI_REALTIME_MODEL: z.string().default('gpt-4o-realtime-preview-2024-10-01'),
+  OPENAI_REALTIME_MODEL: z.string().default('gpt-4o-realtime-preview-2025-06-03'),
   OPENAI_VOICE: z.string().default('alloy'),
   
   // WebSocket
