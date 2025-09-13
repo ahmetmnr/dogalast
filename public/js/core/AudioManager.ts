@@ -607,7 +607,7 @@ export class AudioManager {
 // Audio Utilities
 // ============================================================================
 
-export class AudioUtils {
+export class AudioUtilsStatic {
   /**
    * Check if browser supports required audio features
    */
@@ -701,6 +701,60 @@ export class AudioUtils {
     } catch (error) {
       console.error('Failed to play audio:', error);
       throw error;
+    }
+  }
+
+  // Instance methods removed from static class
+}
+
+/**
+ * Audio utilities for PCM16 conversion and audio processing
+ */
+export class AudioUtils {
+  private audioContext: AudioContext;
+  
+  constructor(audioContext: AudioContext) {
+    this.audioContext = audioContext;
+  }
+
+  /**
+   * Convert Base64 PCM16 to AudioBuffer
+   */
+  convertBase64ToPCM16(base64: string): AudioBuffer {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    const pcm16 = new Int16Array(bytes.buffer);
+    const audioBuffer = this.audioContext.createBuffer(1, pcm16.length, 24000);
+    const channelData = audioBuffer.getChannelData(0);
+    
+    for (let i = 0; i < pcm16.length; i++) {
+      channelData[i] = (pcm16[i] || 0) / 32768;
+    }
+    
+    return audioBuffer;
+  }
+
+  /**
+   * Play audio chunk from OpenAI (Base64 PCM16)
+   */
+  async playAudioChunk(base64Delta: string): Promise<void> {
+    try {
+      const audioBuffer = this.convertBase64ToPCM16(base64Delta);
+      
+      const source = this.audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this.audioContext.destination);
+      source.start();
+      
+      console.log('🔊 Playing audio chunk:', audioBuffer.duration, 'seconds');
+      
+    } catch (error) {
+      console.error('❌ Failed to play audio chunk:', error);
     }
   }
 }

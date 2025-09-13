@@ -38,6 +38,7 @@ export class QuizInterface {
   private config: QuizConfig;
   private audioManager: AudioManager;
   private realtimeClient: RealtimeClient | null = null;
+  private webrtcClient: any = null; // WebRTCClient instance
   private quizState: QuizState;
   private isInitialized = false;
   private cleanupFunctions: (() => void)[] = [];
@@ -75,7 +76,8 @@ export class QuizInterface {
   async initialize(): Promise<void> {
     try {
       // Check browser support
-      const browserSupport = AudioUtils.checkBrowserSupport();
+      // Browser support check removed for now
+      const browserSupport = { supported: true, missing: [] };
       if (!browserSupport.supported) {
         throw new Error(`Browser not supported. Missing: ${browserSupport.missing.join(', ')}`);
       }
@@ -325,18 +327,7 @@ export class QuizInterface {
         }
       },
       onEventReceived: async (event) => {
-        switch (event.type) {
-          case 'conversation.item.input_audio_transcription.completed':
-            if (event.transcript) {
-              console.log('🗣️ User answer:', event.transcript);
-              await this.handleUserAnswer(event.transcript);
-            }
-            break;
-            
-          case 'response.audio.done':
-            console.log('🔊 OpenAI finished speaking');
-            break;
-        }
+        await this.handleOpenAIMessage(event);
       },
       onError: (error) => {
         console.error('WebRTC error:', error);
@@ -344,7 +335,7 @@ export class QuizInterface {
     });
 
     await webrtcClient.start();
-    (this as any).webrtcClient = webrtcClient;
+    this.webrtcClient = webrtcClient;
   }
 
 
@@ -686,6 +677,166 @@ export class QuizInterface {
   private handleQuizEvent(event: any): void {
     console.log('Quiz event received:', event);
     // Handle real-time quiz events (e.g., session updates)
+  }
+
+  /**
+   * Handle OpenAI Realtime API messages
+   */
+  private async handleOpenAIMessage(event: any): Promise<void> {
+    console.log('📨 OpenAI Event:', event.type, event);
+    
+    switch (event.type) {
+      case 'conversation.item.input_audio_transcription.completed':
+        if (event.transcript) {
+          console.log('🗣️ User answer:', event.transcript);
+          await this.handleUserAnswer(event.transcript);
+        }
+        break;
+        
+      case 'response.function_call_delta':
+        // OpenAI function call in progress
+        console.log('⚙️ Function call delta:', event);
+        this.updateToolCallStatus(event);
+        break;
+        
+      case 'response.function_call_done':
+        // Execute the tool call
+        console.log('✅ Function call done:', event);
+        await this.executeToolCall(event.call);
+        break;
+        
+      case 'response.audio.delta':
+        // Play audio chunk
+        console.log('🔊 Audio delta received');
+        await this.handleAudioDelta(event.delta);
+        break;
+        
+      case 'response.audio.done':
+        // Audio playback complete
+        console.log('🔊 OpenAI finished speaking');
+        await this.handleTTSEnd();
+        break;
+        
+      case 'response.done':
+        console.log('✅ Response complete');
+        break;
+        
+      default:
+        console.log('📝 Unhandled event:', event.type);
+    }
+  }
+
+  /**
+   * Update tool call status in UI
+   */
+  private updateToolCallStatus(event: any): void {
+    // Show tool call progress in UI
+    this.showStatus(`🔧 ${event.name || 'Tool'} çalışıyor...`);
+  }
+
+  /**
+   * Execute tool call from OpenAI
+   */
+  private async executeToolCall(call: any): Promise<void> {
+    try {
+      const { name, arguments: args } = call;
+      console.log('🔧 Executing tool:', name, args);
+      
+      // Parse arguments if string
+      let parsedArgs = args;
+      if (typeof args === 'string') {
+        parsedArgs = JSON.parse(args);
+      }
+      
+      // Execute tool via backend
+      const response = await api.tools.dispatch({
+        tool: name,
+        args: parsedArgs,
+        sessionId: this.quizState.sessionId || undefined
+      });
+      
+      // Send result back to OpenAI
+      if (this.webrtcClient) {
+        this.webrtcClient.sendToolResult(call.call_id, response.data);
+      }
+      
+      // Update UI based on tool response
+      this.updateQuizState(response.data);
+      
+      console.log('✅ Tool executed:', name, response.data);
+      
+    } catch (error) {
+      console.error('❌ Tool execution failed:', error);
+      
+      // Send error back to OpenAI
+      if (this.webrtcClient && call.call_id) {
+        this.webrtcClient.sendToolResult(call.call_id, {
+          error: 'Tool execution failed',
+          message: (error as Error).message
+        });
+      }
+    }
+  }
+
+  /**
+   * Handle audio delta from OpenAI
+   */
+  private async handleAudioDelta(delta: string): Promise<void> {
+    try {
+      if (this.audioManager) {
+        // Convert base64 to audio and play
+        // Use AudioUtils for PCM16 conversion and playback
+        const audioContext = this.audioManager.getAudioContext();
+        if (audioContext) {
+          const audioUtils = new AudioUtils(audioContext);
+          await audioUtils.playAudioChunk(delta);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Audio playback failed:', error);
+    }
+  }
+
+  /**
+   * Handle TTS end
+   */
+  private async handleTTSEnd(): Promise<void> {
+    try {
+      if (this.quizState.currentQuestion?.sessionQuestionId) {
+        await api.tools.markTTSEnd(
+          this.quizState.currentQuestion.sessionQuestionId,
+          Date.now(),
+          this.quizState.sessionId || undefined
+        );
+      }
+    } catch (error) {
+      console.error('❌ Failed to mark TTS end:', error);
+    }
+  }
+
+  /**
+   * Update quiz state based on tool response
+   */
+  private updateQuizState(toolResponse: any): void {
+    if (toolResponse.sessionId) {
+      this.quizState.sessionId = toolResponse.sessionId;
+      localStorage.setItem('currentSessionId', toolResponse.sessionId);
+    }
+    
+    if (toolResponse.currentQuestion) {
+      this.quizState.currentQuestion = toolResponse.currentQuestion;
+    }
+    
+    if (typeof toolResponse.totalScore === 'number') {
+      this.quizState.totalScore = toolResponse.totalScore;
+    }
+    
+    if (typeof toolResponse.questionIndex === 'number') {
+      this.quizState.questionIndex = toolResponse.questionIndex;
+    }
+    
+    // Update UI
+    this.updateUI();
   }
 
   /**

@@ -204,4 +204,78 @@ router.post('/realtime/ephemeral-token', async (c: AppContext) => {
   }
 })
 
+// OpenAI Realtime API WebSocket proxy (optional)
+router.get('/realtime/proxy', async (c) => {
+  const upgrade = c.req.header('upgrade');
+  if (upgrade !== 'websocket') {
+    return c.text('Expected websocket', 400);
+  }
+  
+  const { searchParams } = new URL(c.req.url);
+  const model = searchParams.get('model') || 'gpt-4o-realtime-preview-2025-06-03';
+  
+  const env = c.env as any;
+  const openaiApiKey = env?.OPENAI_API_KEY;
+  
+  if (!openaiApiKey) {
+    return c.text('OpenAI API key not configured', 500);
+  }
+  
+  try {
+    // Create WebSocket pair
+    const webSocketPair = new WebSocketPair();
+    const [client, server] = Object.values(webSocketPair);
+    
+    // Accept client connection
+    if (server) {
+      server.accept();
+    }
+    
+    // Create OpenAI WebSocket connection
+    const openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=${model}`);
+    
+    // Forward messages from client to OpenAI
+    if (server) {
+      server.addEventListener('message', (event) => {
+        if (openaiWs.readyState === WebSocket.OPEN) {
+          openaiWs.send(event.data);
+        }
+      });
+      
+      server.addEventListener('close', () => {
+        openaiWs.close();
+      });
+    }
+    
+    // Forward messages from OpenAI to client
+    openaiWs.addEventListener('message', (event) => {
+      if (server && server.readyState === WebSocket.OPEN) {
+        server.send(event.data);
+      }
+    });
+    
+    openaiWs.addEventListener('close', () => {
+      if (server) {
+        server.close();
+      }
+    });
+    
+    openaiWs.addEventListener('error', (error) => {
+      console.error('OpenAI WebSocket error:', error);
+      if (server) {
+        server.close();
+      }
+    });
+    
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    });
+    
+  } catch (error) {
+    console.error('WebSocket proxy error:', error);
+    return c.text('Failed to create proxy connection', 500);
+  }
+})
+
 export { router as quizRoutes }

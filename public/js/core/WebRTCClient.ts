@@ -122,11 +122,13 @@ export class WebRTCClient {
           'Authorization': `Bearer ${this.ephemeralToken}`,
           'Content-Type': 'application/sdp'
         },
-        body: offer.sdp
+        body: this.pc.localDescription?.sdp
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to connect: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ OpenAI API Error:', response.status, errorText);
+        throw new Error(`Failed to connect to OpenAI: ${response.status} - ${errorText}`);
       }
 
       const answerSdp = await response.text();
@@ -149,6 +151,22 @@ export class WebRTCClient {
     } else {
       console.warn('Data channel not ready');
     }
+  }
+
+  /**
+   * Send tool execution result back to OpenAI
+   */
+  sendToolResult(callId: string, result: any): void {
+    const toolResponse = {
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: callId,
+        output: JSON.stringify(result)
+      }
+    };
+    
+    this.sendEvent(toolResponse);
   }
 
   disconnect(): void {
