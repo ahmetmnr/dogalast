@@ -48,6 +48,10 @@ export interface TimingAnalysis {
  */
 export class TimingService {
   private db: DatabaseInstance;
+  private lastEventKey?: string;
+  private lastEventTimestamp?: number;
+  private lastEventId?: string;
+  private static readonly DUPLICATE_WINDOW_MS = 1000;
 
   constructor(db: DatabaseInstance) {
     this.db = db;
@@ -58,6 +62,20 @@ export class TimingService {
    */
   async markTimingEvent(event: TimingEvent): Promise<string> {
     const serverTimestamp = this.getMonotonicTime();
+    const eventKey = `${event.sessionQuestionId}_${event.eventType}`;
+
+    if (
+      this.lastEventKey === eventKey &&
+      this.lastEventTimestamp !== undefined &&
+      serverTimestamp - this.lastEventTimestamp < TimingService.DUPLICATE_WINDOW_MS
+    ) {
+      Logger.info('Duplicate timing event detected, skipping', {
+        eventType: event.eventType,
+        sessionQuestionId: event.sessionQuestionId,
+      });
+      return this.lastEventId as string;
+    }
+
     const eventId = crypto.randomUUID();
 
     try {
@@ -81,6 +99,10 @@ export class TimingService {
         serverTimestamp,
         networkLatency,
       });
+
+      this.lastEventKey = eventKey;
+      this.lastEventTimestamp = serverTimestamp;
+      this.lastEventId = eventId;
 
       return eventId;
     } catch (error) {
