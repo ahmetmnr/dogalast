@@ -268,7 +268,7 @@ export class AudioManager {
   /**
    * Cleanup audio resources
    */
-  async cleanup(): Promise<void> {
+  async cleanupOld(): Promise<void> {
     try {
       await this.stopRecording();
 
@@ -513,6 +513,20 @@ export class AudioManager {
   }
 
   /**
+   * Calculate current RMS from analyzer
+   */
+  private calculateRMS(): number {
+    if (!this.analyserNode) {
+      return 0;
+    }
+    
+    const dataArray = new Float32Array(this.analyserNode.frequencyBinCount);
+    this.analyserNode.getFloatFrequencyData(dataArray);
+    
+    return this.calculateRMSEnergy(dataArray);
+  }
+
+  /**
    * Process calibration samples to determine optimal VAD threshold
    */
   private processCalibrationSamples(samples: number[]): AudioCalibrationResult {
@@ -683,6 +697,237 @@ export class AudioManager {
       }
       return this.audioContext.createBuffer(1, 1, 24000);
     }
+  }
+
+  /**
+   * Advanced VAD calibration with real-time adaptation
+   */
+  async calibrateVADAdvanced(durationMs: number = 5000): Promise<void> {
+    console.log('🎯 Starting advanced VAD calibration...');
+    
+    const samples: number[] = [];
+    const startTime = Date.now();
+    let sampleCount = 0;
+    
+    // Collect samples with real-time feedback
+    while (Date.now() - startTime < durationMs) {
+      const rms = this.calculateRMS();
+      if (rms > 0) {
+        samples.push(rms);
+        sampleCount++;
+        
+        // Real-time feedback every second
+        if (sampleCount % 10 === 0) {
+          const progress = ((Date.now() - startTime) / durationMs * 100).toFixed(0);
+          console.log(`📊 Calibration progress: ${progress}% (${sampleCount} samples)`);
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    if (samples.length < 20) {
+      console.warn('⚠️ Insufficient calibration samples, using default threshold');
+      return;
+    }
+    
+    // Advanced statistical analysis
+    const sorted = [...samples].sort((a, b) => a - b);
+    const q1 = sorted[Math.floor(sorted.length * 0.25)] || 0;
+    const q3 = sorted[Math.floor(sorted.length * 0.75)] || 0;
+    const iqr = q3 - q1;
+    const median = sorted[Math.floor(sorted.length * 0.5)] || 0;
+    
+    // Remove outliers using IQR method
+    const cleanSamples = samples.filter(s => s >= (q1 - 1.5 * iqr) && s <= (q3 + 1.5 * iqr));
+    
+    // Calculate robust statistics
+    const mean = cleanSamples.reduce((a, b) => a + b) / cleanSamples.length;
+    const variance = cleanSamples.reduce((a, b) => a + Math.pow(b - mean, 2)) / cleanSamples.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // Environment-aware threshold calculation
+    this.backgroundNoise = median; // Use median instead of mean for robustness
+    const environmentFactor = this.detectEnvironmentType(samples);
+    const adaptiveThreshold = this.backgroundNoise + (environmentFactor * stdDev);
+    
+    // Set threshold with intelligent bounds
+    this.config.vadThreshold = Math.max(0.003, Math.min(0.08, adaptiveThreshold));
+    this.isCalibrated = true;
+    
+    const result = {
+      backgroundNoise: this.backgroundNoise,
+      threshold: this.config.vadThreshold,
+      environmentType: this.getEnvironmentDescription(environmentFactor),
+      quality: this.assessCalibrationQuality(stdDev, this.backgroundNoise),
+      samples: cleanSamples.length,
+      outliers: samples.length - cleanSamples.length
+    };
+    
+    console.log('✅ Advanced VAD calibration complete:', {
+      background: this.backgroundNoise.toFixed(6),
+      threshold: this.config.vadThreshold.toFixed(6),
+      environment: result.environmentType,
+      quality: result.quality,
+      samples: result.samples,
+      outliers: result.outliers
+    });
+    
+    // Enable real-time threshold adaptation
+    this.enableAdaptiveThreshold();
+    
+    this.emitEvent('calibrationComplete', result);
+  }
+  
+  /**
+   * Detect environment type based on noise patterns
+   */
+  private detectEnvironmentType(samples: number[]): number {
+    const variance = samples.reduce((acc, val, _, arr) => {
+      const mean = arr.reduce((a, b) => a + b) / arr.length;
+      return acc + Math.pow(val - mean, 2);
+    }, 0) / samples.length;
+    
+    const stdDev = Math.sqrt(variance);
+    const maxSample = Math.max(...samples);
+    const minSample = Math.min(...samples.filter(s => s > 0));
+    const dynamicRange = minSample > 0 ? maxSample / minSample : 1;
+    
+    // Environment classification
+    if (stdDev < 0.002 && dynamicRange < 3) {
+      return 2.0; // Quiet environment - lower threshold multiplier
+    } else if (stdDev > 0.01 || dynamicRange > 10) {
+      return 4.0; // Noisy environment - higher threshold multiplier
+    } else {
+      return 3.0; // Normal environment - standard multiplier
+    }
+  }
+  
+  /**
+   * Get environment description
+   */
+  private getEnvironmentDescription(factor: number): string {
+    if (factor <= 2.5) return 'quiet';
+    if (factor <= 3.5) return 'normal';
+    return 'noisy';
+  }
+  
+  /**
+   * Assess calibration quality
+   */
+  private assessCalibrationQuality(stdDev: number, backgroundNoise: number): string {
+    if (backgroundNoise === 0) return 'poor';
+    const ratio = stdDev / backgroundNoise;
+    if (ratio < 0.3) return 'excellent';
+    if (ratio < 0.6) return 'good';
+    if (ratio < 1.0) return 'fair';
+    return 'poor';
+  }
+  
+  /**
+   * Enable real-time threshold adaptation
+   */
+  private enableAdaptiveThreshold(): void {
+    let adaptationSamples: number[] = [];
+    
+    const adaptationInterval = setInterval(() => {
+      const currentRMS = this.calculateRMS();
+      if (currentRMS > 0) {
+        adaptationSamples.push(currentRMS);
+        
+        // Adapt threshold every 50 samples
+        if (adaptationSamples.length >= 50) {
+          const recentNoise = adaptationSamples.slice(-20).reduce((a, b) => a + b) / 20;
+          
+          // Gradual adaptation (moving average)
+          this.backgroundNoise = this.backgroundNoise * 0.9 + recentNoise * 0.1;
+          
+          // Update threshold with noise compensation
+          const variance = adaptationSamples.slice(-20).reduce((acc, val) => 
+            acc + Math.pow(val - recentNoise, 2), 0) / 20;
+          const stdDev = Math.sqrt(variance);
+          const newThreshold = this.backgroundNoise + (2.5 * stdDev);
+          
+          this.config.vadThreshold = Math.max(0.003, Math.min(0.08, newThreshold));
+          
+          // Keep only recent samples
+          adaptationSamples = adaptationSamples.slice(-30);
+          
+          // Log adaptation every 10 updates
+          if (adaptationSamples.length % 10 === 0) {
+            console.log('🔄 VAD threshold adapted:', {
+              background: this.backgroundNoise.toFixed(6),
+              threshold: this.config.vadThreshold.toFixed(6),
+              samples: adaptationSamples.length
+            });
+          }
+        }
+      }
+    }, 200); // Check every 200ms
+    
+    // Store interval for cleanup
+    (this as any).adaptationInterval = adaptationInterval;
+  }
+
+  /**
+   * Disable adaptive threshold (cleanup)
+   */
+  disableAdaptiveThreshold(): void {
+    if ((this as any).adaptationInterval) {
+      clearInterval((this as any).adaptationInterval);
+      (this as any).adaptationInterval = null;
+      console.log('🔄 Adaptive threshold disabled');
+    }
+  }
+
+  /**
+   * Get real-time VAD metrics
+   */
+  getVADMetrics(): {
+    currentRMS: number;
+    threshold: number;
+    backgroundNoise: number;
+    isSpeaking: boolean;
+    signalToNoiseRatio: number;
+  } {
+    const currentRMS = this.calculateRMS();
+    const snr = this.backgroundNoise > 0 ? currentRMS / this.backgroundNoise : 0;
+    
+    return {
+      currentRMS,
+      threshold: this.config.vadThreshold,
+      backgroundNoise: this.backgroundNoise,
+      isSpeaking: this.isSpeaking,
+      signalToNoiseRatio: snr
+    };
+  }
+
+  /**
+   * Enhanced cleanup with adaptive threshold cleanup
+   */
+  async cleanup(): Promise<void> {
+    console.log('🧹 Cleaning up AudioManager...');
+    
+    // Disable adaptive threshold
+    this.disableAdaptiveThreshold();
+    
+    // Stop recording
+    await this.stopRecording();
+    
+    // Close audio context
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      await this.audioContext.close();
+    }
+    
+    // Clear buffers
+    this.vadBuffer = [];
+    
+    // Reset state
+    this.isRecording = false;
+    this.isSpeaking = false;
+    this.isCalibrated = false;
+    this.backgroundNoise = 0;
+    
+    console.log('✅ AudioManager cleanup completed');
   }
 }
 

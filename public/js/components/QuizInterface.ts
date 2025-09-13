@@ -131,6 +131,33 @@ export class QuizInterface {
         this.quizState.isActive = true;
         this.quizState.currentSessionQuestionId = response.data.currentQuestion?.sessionQuestionId;
         
+        // Start quiz timer
+        localStorage.setItem('quizStartTime', Date.now().toString());
+        
+        // Start timer update interval
+        const timerInterval = setInterval(() => {
+          if (this.quizState.isActive) {
+            this.updateTimerDisplay();
+          } else {
+            clearInterval(timerInterval);
+          }
+        }, 1000);
+        
+        // Store interval for cleanup
+        this.cleanupFunctions.push(() => clearInterval(timerInterval));
+        
+        // Start VAD indicator update interval
+        const vadInterval = setInterval(() => {
+          if (this.quizState.isActive && this.audioManager) {
+            this.updateStatusIndicators();
+          } else {
+            clearInterval(vadInterval);
+          }
+        }, 100); // Update VAD indicator every 100ms
+        
+        // Store VAD interval for cleanup
+        this.cleanupFunctions.push(() => clearInterval(vadInterval));
+        
         // Save sessionId to localStorage
         localStorage.setItem('currentSessionId', response.data.sessionId);
 
@@ -147,7 +174,7 @@ export class QuizInterface {
         // Present first question
         await this.presentCurrentQuestion();
 
-        this.updateUI();
+        this.updateUIEnhanced();
         this.notifyStateChange();
 
         console.log('Quiz started successfully:', this.quizState.sessionId);
@@ -469,7 +496,7 @@ export class QuizInterface {
         // Present new question
         await this.presentCurrentQuestion();
 
-        this.updateUI();
+        this.updateUIEnhanced();
         this.notifyStateChange();
 
       } else {
@@ -512,7 +539,7 @@ export class QuizInterface {
         console.log('🔊 TTS completed');
         // Start listening for user answer
         this.startListeningForAnswer();
-        this.updateUI();
+        this.updateUIEnhanced();
       };
       
       utterance.onerror = (error) => {
@@ -626,7 +653,7 @@ export class QuizInterface {
       const response = await api.tools.nextQuestion(this.quizState.sessionId || '');
       if (response.success && response.data) {
         this.quizState.currentQuestion = response.data;
-        this.updateUI();
+        this.updateUIEnhanced();
         
         // Start listening for answer after a brief delay
         setTimeout(() => {
@@ -839,8 +866,8 @@ export class QuizInterface {
       this.updateLeaderboardPosition(toolResponse.leaderboardPosition);
     }
     
-    // Update main UI
-    this.updateUI();
+    // Update main UI with enhanced features
+    this.updateUIEnhanced();
     
     // Trigger state change notifications
     this.notifyStateChange();
@@ -848,84 +875,7 @@ export class QuizInterface {
     console.log('✅ Quiz state updated successfully');
   }
   
-  /**
-   * Animate score increase
-   */
-  private animateScoreIncrease(fromScore: number, toScore: number): void {
-    const scoreElement = document.getElementById('score-value');
-    if (!scoreElement) return;
-    
-    const duration = 1000; // 1 second animation
-    const startTime = Date.now();
-    const scoreDiff = toScore - fromScore;
-    
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Easing function for smooth animation
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-      const currentScore = Math.round(fromScore + (scoreDiff * easeOut));
-      
-      scoreElement.textContent = currentScore.toString();
-      scoreElement.style.transform = `scale(${1 + (0.2 * Math.sin(progress * Math.PI))})`;
-      
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        scoreElement.style.transform = 'scale(1)';
-      }
-    };
-    
-    animate();
-  }
-  
-  /**
-   * Update progress bar
-   */
-  private updateProgressBar(): void {
-    const progressBar = document.getElementById('quiz-progress');
-    const progressText = document.getElementById('progress-text');
-    
-    if (progressBar && progressText) {
-      const totalQuestions = 10; // Adjust based on your quiz
-      const progress = (this.quizState.questionIndex / totalQuestions) * 100;
-      
-      progressBar.style.width = `${progress}%`;
-      progressText.textContent = `${this.quizState.questionIndex}/${totalQuestions}`;
-    }
-  }
-  
-  /**
-   * Update leaderboard position
-   */
-  private updateLeaderboardPosition(position: any): void {
-    const positionElement = document.getElementById('leaderboard-position');
-    if (positionElement) {
-      positionElement.textContent = `Sıralama: ${position.rank}/${position.total}`;
-      positionElement.className = position.rank <= 3 ? 'top-rank' : 'normal-rank';
-    }
-  }
-  
-  /**
-   * Handle quiz completion
-   */
-  private handleQuizCompletion(completionData: any): void {
-    this.quizState.isActive = false;
-    
-    // Show completion modal
-    this.showQuizResults({
-      finalScore: completionData.finalScore,
-      totalQuestions: completionData.totalQuestions,
-      correctAnswers: completionData.correctAnswers,
-      timeSpent: completionData.timeSpent,
-      rank: completionData.rank,
-      percentage: completionData.percentage
-    });
-    
-    // Cleanup resources
-    this.cleanup();
-  }
+  // Duplicate methods removed - using enhanced versions at end of class
 
   /**
    * Handle errors
@@ -1069,6 +1019,366 @@ export class QuizInterface {
     
     if (calibrateBtn) {
       calibrateBtn.style.display = this.quizState.isActive ? 'inline-flex' : 'none';
+    }
+  }
+
+  /**
+   * Animate score increase with smooth transition
+   */
+  private animateScoreIncrease(fromScore: number, toScore: number): void {
+    const scoreElement = document.getElementById('score-value');
+    if (!scoreElement) return;
+    
+    const duration = 1000; // 1 second animation
+    const startTime = Date.now();
+    const scoreDiff = toScore - fromScore;
+    
+    // Add visual feedback
+    scoreElement.style.transition = 'all 0.3s ease';
+    scoreElement.style.color = '#4CAF50'; // Green for positive score
+    
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smooth animation
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const currentScore = Math.round(fromScore + (scoreDiff * easeOut));
+      
+      scoreElement.textContent = currentScore.toString();
+      scoreElement.style.transform = `scale(${1 + (0.2 * Math.sin(progress * Math.PI))})`;
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        scoreElement.style.transform = 'scale(1)';
+        scoreElement.style.color = ''; // Reset color
+        
+        // Show score increase indicator
+        this.showScoreIncrease(scoreDiff);
+      }
+    };
+    
+    animate();
+  }
+
+  /**
+   * Show score increase indicator
+   */
+  private showScoreIncrease(points: number): void {
+    const indicator = document.createElement('div');
+    indicator.className = 'score-increase-indicator';
+    indicator.textContent = `+${points}`;
+    indicator.style.cssText = `
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: #4CAF50;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      z-index: 1000;
+      animation: scoreIncrease 2s ease-out forwards;
+    `;
+    
+    // Add CSS animation
+    if (!document.getElementById('score-animation-style')) {
+      const style = document.createElement('style');
+      style.id = 'score-animation-style';
+      style.textContent = `
+        @keyframes scoreIncrease {
+          0% { opacity: 0; transform: translateY(20px) scale(0.8); }
+          20% { opacity: 1; transform: translateY(0) scale(1.1); }
+          80% { opacity: 1; transform: translateY(-10px) scale(1); }
+          100% { opacity: 0; transform: translateY(-30px) scale(0.9); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(indicator);
+    
+    // Remove after animation
+    setTimeout(() => {
+      if (indicator.parentNode) {
+        indicator.parentNode.removeChild(indicator);
+      }
+    }, 2000);
+  }
+  
+  /**
+   * Update progress bar with smooth animation
+   */
+  private updateProgressBar(): void {
+    const progressBar = document.getElementById('quiz-progress');
+    const progressText = document.getElementById('progress-text');
+    const progressContainer = document.getElementById('progress-container');
+    
+    if (progressBar && progressText) {
+      const totalQuestions = 10; // Get from quiz config
+      const progress = Math.min((this.quizState.questionIndex / totalQuestions) * 100, 100);
+      
+      // Smooth progress bar animation
+      progressBar.style.transition = 'width 0.5s ease';
+      progressBar.style.width = `${progress}%`;
+      
+      // Update text
+      progressText.textContent = `Soru ${this.quizState.questionIndex}/${totalQuestions}`;
+      
+      // Visual feedback for progress
+      if (progressContainer) {
+        progressContainer.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+          progressContainer.style.transform = 'scale(1)';
+        }, 200);
+      }
+      
+      // Progress milestone feedback
+      if (progress === 25 || progress === 50 || progress === 75) {
+        this.showStatus(`🎯 %${progress} tamamlandı!`);
+      }
+    }
+  }
+  
+  /**
+   * Update leaderboard position with visual feedback
+   */
+  private updateLeaderboardPosition(position: any): void {
+    const positionElement = document.getElementById('leaderboard-position');
+    const rankElement = document.getElementById('current-rank');
+    
+    if (positionElement) {
+      const oldRank = parseInt(positionElement.dataset['rank'] || '999');
+      const newRank = position.rank;
+      
+      positionElement.textContent = `Sıralama: ${newRank}/${position.total}`;
+      positionElement.dataset['rank'] = newRank.toString();
+      
+      // Rank improvement animation
+      if (newRank < oldRank) {
+        positionElement.style.color = '#4CAF50';
+        positionElement.style.transform = 'scale(1.1)';
+        this.showStatus(`🎉 Sıralamanız yükseldi! ${oldRank} → ${newRank}`);
+        
+        setTimeout(() => {
+          positionElement.style.transform = 'scale(1)';
+          positionElement.style.color = '';
+        }, 1000);
+      }
+      
+      // Rank-based styling
+      positionElement.className = newRank <= 3 ? 'top-rank' : 
+                                  newRank <= 10 ? 'good-rank' : 'normal-rank';
+    }
+    
+    if (rankElement) {
+      rankElement.textContent = `#${position.rank}`;
+      rankElement.className = position.rank <= 3 ? 'medal-rank' : 'normal-rank';
+    }
+  }
+  
+  /**
+   * Handle quiz completion with celebration
+   */
+  private handleQuizCompletion(completionData: any): void {
+    this.quizState.isActive = false;
+    
+    // Celebration animation
+    this.showCelebration(completionData.finalScore);
+    
+    // Show completion modal with results
+    setTimeout(() => {
+      this.showQuizResults({
+        finalScore: completionData.finalScore || this.quizState.totalScore,
+        totalQuestions: completionData.totalQuestions || 10,
+        correctAnswers: completionData.correctAnswers || 0,
+        timeSpent: completionData.timeSpent || '0:00',
+        rank: completionData.rank || 'N/A',
+        percentage: completionData.percentage || 0
+      });
+    }, 2000);
+    
+    // Cleanup resources
+    setTimeout(() => {
+      this.cleanup();
+    }, 5000);
+  }
+
+  /**
+   * Show celebration animation
+   */
+  private showCelebration(finalScore: number): void {
+    // Create celebration overlay
+    const celebration = document.createElement('div');
+    celebration.className = 'celebration-overlay';
+    celebration.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(76, 175, 80, 0.1);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      animation: celebrationFade 3s ease-out forwards;
+    `;
+    
+    celebration.innerHTML = `
+      <div style="text-align: center; color: #4CAF50;">
+        <h1 style="font-size: 4rem; margin: 0; animation: bounce 1s ease-in-out;">🎉</h1>
+        <h2 style="font-size: 2rem; margin: 10px 0;">Tebrikler!</h2>
+        <p style="font-size: 1.5rem; margin: 0;">Final Skor: ${finalScore}</p>
+      </div>
+    `;
+    
+    // Add celebration CSS
+    if (!document.getElementById('celebration-style')) {
+      const style = document.createElement('style');
+      style.id = 'celebration-style';
+      style.textContent = `
+        @keyframes celebrationFade {
+          0% { opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-30px); }
+          60% { transform: translateY(-15px); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(celebration);
+    
+    // Remove after animation
+    setTimeout(() => {
+      if (celebration.parentNode) {
+        celebration.parentNode.removeChild(celebration);
+      }
+    }, 3000);
+  }
+
+  /**
+   * Enhanced updateUI with real-time data binding
+   */
+  private updateUIEnhanced(): void {
+    // Call original updateUI
+    this.updateUI();
+    
+    // Additional real-time updates
+    this.updateScoreDisplay();
+    this.updateQuestionDisplay();
+    this.updateStatusIndicators();
+    this.updateTimerDisplay();
+  }
+
+  /**
+   * Update score display with formatting
+   */
+  private updateScoreDisplay(): void {
+    const scoreElement = document.getElementById('score-value');
+    const scoreLabel = document.getElementById('score-label');
+    
+    if (scoreElement) {
+      scoreElement.textContent = this.quizState.totalScore.toString();
+      
+      // Score color based on performance
+      const percentage = (this.quizState.totalScore / (this.quizState.questionIndex * 100)) * 100;
+      if (percentage >= 80) {
+        scoreElement.style.color = '#4CAF50'; // Green
+      } else if (percentage >= 60) {
+        scoreElement.style.color = '#FF9800'; // Orange
+      } else {
+        scoreElement.style.color = '#F44336'; // Red
+      }
+    }
+    
+    if (scoreLabel) {
+      const avgScore = this.quizState.questionIndex > 0 ? 
+        Math.round(this.quizState.totalScore / this.quizState.questionIndex) : 0;
+      scoreLabel.textContent = `Ortalama: ${avgScore} puan`;
+    }
+  }
+
+  /**
+   * Update question display with enhanced formatting
+   */
+  private updateQuestionDisplay(): void {
+    const questionText = document.getElementById('question-text');
+    const questionNumber = document.getElementById('question-number');
+    const optionsContainer = document.getElementById('question-options');
+    
+    if (this.quizState.currentQuestion) {
+      if (questionText) {
+        questionText.textContent = this.quizState.currentQuestion.text;
+        questionText.style.animation = 'fadeIn 0.5s ease';
+      }
+      
+      if (questionNumber) {
+        questionNumber.textContent = `Soru ${this.quizState.questionIndex + 1}`;
+      }
+      
+      if (optionsContainer && this.quizState.currentQuestion.options) {
+        optionsContainer.innerHTML = this.quizState.currentQuestion.options
+          .map((option: string, index: number) => `
+            <div class="option-item" data-index="${index}">
+              <span class="option-letter">${String.fromCharCode(65 + index)}</span>
+              <span class="option-text">${option}</span>
+            </div>
+          `).join('');
+      }
+    }
+  }
+
+  /**
+   * Update status indicators
+   */
+  private updateStatusIndicators(): void {
+    const micStatus = document.getElementById('mic-status');
+    const connectionStatus = document.getElementById('connection-status');
+    const vadIndicator = document.getElementById('vad-indicator');
+    
+    if (micStatus) {
+      micStatus.className = this.quizState.isWaitingForAnswer ? 'mic-active' : 'mic-inactive';
+      micStatus.textContent = this.quizState.isWaitingForAnswer ? '🎤 Dinliyor...' : '🎤 Bekliyor';
+    }
+    
+    if (connectionStatus) {
+      const isConnected = this.webrtcClient !== null;
+      connectionStatus.className = isConnected ? 'connected' : 'disconnected';
+      connectionStatus.textContent = isConnected ? '🟢 Bağlı' : '🔴 Bağlantı Yok';
+    }
+    
+    if (vadIndicator && this.audioManager) {
+      const vadMetrics = this.audioManager.getVADMetrics?.();
+      if (vadMetrics) {
+        const intensity = Math.min(vadMetrics.currentRMS / vadMetrics.threshold, 1);
+        vadIndicator.style.opacity = intensity.toString();
+        vadIndicator.style.transform = `scale(${1 + intensity * 0.3})`;
+      }
+    }
+  }
+
+  /**
+   * Update timer display
+   */
+  private updateTimerDisplay(): void {
+    const timerElement = document.getElementById('quiz-timer');
+    if (timerElement && this.quizState.isActive) {
+      const startTime = localStorage.getItem('quizStartTime');
+      if (startTime) {
+        const elapsed = Date.now() - parseInt(startTime);
+        const minutes = Math.floor(elapsed / 60000);
+        const seconds = Math.floor((elapsed % 60000) / 1000);
+        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
     }
   }
 
