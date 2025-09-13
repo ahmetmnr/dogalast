@@ -3,7 +3,7 @@
  * Integrates audio, realtime, and quiz functionality
  */
 
-import { AudioManager, AudioUtils, type AudioEvent } from '../core/AudioManager';
+import { AudioManager, type AudioEvent } from '../core/AudioManager';
 import { RealtimeClient } from '../core/RealtimeClient';
 import { WebSocketEventHelper } from '../core/WebSocketManager';
 import { api, apiClient } from '../core/ApiClient';
@@ -258,33 +258,7 @@ export class QuizInterface {
     }
   }
 
-  /**
-   * Cleanup resources
-   */
-  async cleanup(): Promise<void> {
-    try {
-      // Stop audio recording
-      await this.audioManager.stopRecording();
-
-      // Disconnect realtime client
-      if (this.realtimeClient) {
-        await this.realtimeClient.disconnect();
-        this.realtimeClient = null;
-      }
-
-      // Cleanup audio manager
-      await this.audioManager.cleanup();
-
-      // Run cleanup functions
-      this.cleanupFunctions.forEach(cleanup => cleanup());
-      this.cleanupFunctions = [];
-
-      console.log('Quiz interface cleaned up');
-
-    } catch (error) {
-      console.error('Cleanup failed:', error);
-    }
-  }
+  // Cleanup method moved to end of class
 
   // ============================================================================
   // Private Methods
@@ -783,17 +757,19 @@ export class QuizInterface {
    */
   private async handleAudioDelta(delta: string): Promise<void> {
     try {
-      if (this.audioManager) {
-        // Convert base64 to audio and play
-        // Use AudioUtils for PCM16 conversion and playback
-        const audioContext = this.audioManager.getAudioContext();
-        if (audioContext) {
-          const audioUtils = new AudioUtils(audioContext);
-          await audioUtils.playAudioChunk(delta);
-        }
+      if (!delta || delta.length === 0) {
+        return;
       }
+      
+      if (this.audioManager) {
+        // Direct method call on AudioManager
+        await this.audioManager.playAudioChunk(delta);
+      } else {
+        console.warn('⚠️ AudioManager not initialized for audio playback');
+      }
+      
     } catch (error) {
-      console.error('❌ Audio playback failed:', error);
+      console.error('❌ Audio delta playback failed:', error);
     }
   }
 
@@ -815,28 +791,140 @@ export class QuizInterface {
   }
 
   /**
-   * Update quiz state based on tool response
+   * Update quiz state based on tool response with comprehensive UI updates
    */
   private updateQuizState(toolResponse: any): void {
+    console.log('🔄 Updating quiz state:', toolResponse);
+    
+    // Session ID updates
     if (toolResponse.sessionId) {
       this.quizState.sessionId = toolResponse.sessionId;
       localStorage.setItem('currentSessionId', toolResponse.sessionId);
     }
     
+    // Question updates
     if (toolResponse.currentQuestion) {
       this.quizState.currentQuestion = toolResponse.currentQuestion;
+      this.showStatus(`📝 Soru ${this.quizState.questionIndex + 1} yüklendi`);
     }
     
+    // Score updates with animation
     if (typeof toolResponse.totalScore === 'number') {
+      const oldScore = this.quizState.totalScore;
       this.quizState.totalScore = toolResponse.totalScore;
+      
+      if (toolResponse.totalScore > oldScore) {
+        this.animateScoreIncrease(oldScore, toolResponse.totalScore);
+      }
     }
     
+    // Progress updates
     if (typeof toolResponse.questionIndex === 'number') {
       this.quizState.questionIndex = toolResponse.questionIndex;
+      this.updateProgressBar();
     }
     
-    // Update UI
+    // Answer feedback
+    if (toolResponse.answerResult) {
+      this.showAnswerFeedback(toolResponse.answerResult);
+    }
+    
+    // Quiz completion
+    if (toolResponse.quizCompleted) {
+      this.handleQuizCompletion(toolResponse);
+    }
+    
+    // Real-time leaderboard updates
+    if (toolResponse.leaderboardPosition) {
+      this.updateLeaderboardPosition(toolResponse.leaderboardPosition);
+    }
+    
+    // Update main UI
     this.updateUI();
+    
+    // Trigger state change notifications
+    this.notifyStateChange();
+    
+    console.log('✅ Quiz state updated successfully');
+  }
+  
+  /**
+   * Animate score increase
+   */
+  private animateScoreIncrease(fromScore: number, toScore: number): void {
+    const scoreElement = document.getElementById('score-value');
+    if (!scoreElement) return;
+    
+    const duration = 1000; // 1 second animation
+    const startTime = Date.now();
+    const scoreDiff = toScore - fromScore;
+    
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smooth animation
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const currentScore = Math.round(fromScore + (scoreDiff * easeOut));
+      
+      scoreElement.textContent = currentScore.toString();
+      scoreElement.style.transform = `scale(${1 + (0.2 * Math.sin(progress * Math.PI))})`;
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        scoreElement.style.transform = 'scale(1)';
+      }
+    };
+    
+    animate();
+  }
+  
+  /**
+   * Update progress bar
+   */
+  private updateProgressBar(): void {
+    const progressBar = document.getElementById('quiz-progress');
+    const progressText = document.getElementById('progress-text');
+    
+    if (progressBar && progressText) {
+      const totalQuestions = 10; // Adjust based on your quiz
+      const progress = (this.quizState.questionIndex / totalQuestions) * 100;
+      
+      progressBar.style.width = `${progress}%`;
+      progressText.textContent = `${this.quizState.questionIndex}/${totalQuestions}`;
+    }
+  }
+  
+  /**
+   * Update leaderboard position
+   */
+  private updateLeaderboardPosition(position: any): void {
+    const positionElement = document.getElementById('leaderboard-position');
+    if (positionElement) {
+      positionElement.textContent = `Sıralama: ${position.rank}/${position.total}`;
+      positionElement.className = position.rank <= 3 ? 'top-rank' : 'normal-rank';
+    }
+  }
+  
+  /**
+   * Handle quiz completion
+   */
+  private handleQuizCompletion(completionData: any): void {
+    this.quizState.isActive = false;
+    
+    // Show completion modal
+    this.showQuizResults({
+      finalScore: completionData.finalScore,
+      totalQuestions: completionData.totalQuestions,
+      correctAnswers: completionData.correctAnswers,
+      timeSpent: completionData.timeSpent,
+      rank: completionData.rank,
+      percentage: completionData.percentage
+    });
+    
+    // Cleanup resources
+    this.cleanup();
   }
 
   /**
@@ -1161,6 +1249,43 @@ export class QuizInterface {
     if (this.config.onStateChange) {
       this.config.onStateChange({ ...this.quizState });
     }
+  }
+
+  /**
+   * Cleanup resources
+   */
+  private cleanup(): void {
+    console.log('🧹 Cleaning up quiz resources...');
+    
+    // Cleanup audio
+    if (this.audioManager) {
+      this.audioManager.stopRecording();
+    }
+    
+    // Cleanup WebRTC
+    if (this.webrtcClient) {
+      this.webrtcClient.disconnect();
+      this.webrtcClient = null;
+    }
+    
+    // Cleanup realtime client
+    if (this.realtimeClient) {
+      this.realtimeClient.disconnect();
+      this.realtimeClient = null;
+    }
+    
+    // Run cleanup functions
+    this.cleanupFunctions.forEach(fn => {
+      try {
+        fn();
+      } catch (error) {
+        console.error('Cleanup function failed:', error);
+      }
+    });
+    
+    this.cleanupFunctions = [];
+    
+    console.log('✅ Cleanup completed');
   }
 }
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Audio Manager
  * Microphone access, audio processing, and Voice Activity Detection
  */
@@ -102,7 +102,7 @@ export class AudioManager {
       console.error('Audio initialization failed:', error);
       this.emitEvent('error', {
         code: 'AUDIO_INIT_FAILED',
-        message: 'Ses sistemi başlatılamadı',
+        message: 'Ses sistemi baÅŸlatÄ±lamadÄ±',
         details: error
       });
       throw error;
@@ -138,7 +138,7 @@ export class AudioManager {
       console.error('Failed to start recording:', error);
       this.emitEvent('error', {
         code: 'RECORDING_START_FAILED',
-        message: 'Kayıt başlatılamadı',
+        message: 'KayÄ±t baÅŸlatÄ±lamadÄ±',
         details: error
       });
       throw error;
@@ -347,21 +347,21 @@ export class AudioManager {
     } catch (error) {
       console.error('Microphone access denied:', error);
       
-      let errorMessage = 'Mikrofon erişimi reddedildi';
+      let errorMessage = 'Mikrofon eriÅŸimi reddedildi';
       
       if (error instanceof Error) {
         switch (error.name) {
           case 'NotAllowedError':
-            errorMessage = 'Mikrofon erişimi reddedildi. Lütfen tarayıcı ayarlarından mikrofon izni verin.';
+            errorMessage = 'Mikrofon eriÅŸimi reddedildi. LÃ¼tfen tarayÄ±cÄ± ayarlarÄ±ndan mikrofon izni verin.';
             break;
           case 'NotFoundError':
-            errorMessage = 'Mikrofon bulunamadı. Lütfen bir mikrofon bağlayın.';
+            errorMessage = 'Mikrofon bulunamadÄ±. LÃ¼tfen bir mikrofon baÄŸlayÄ±n.';
             break;
           case 'NotReadableError':
-            errorMessage = 'Mikrofon başka bir uygulama tarafından kullanılıyor.';
+            errorMessage = 'Mikrofon baÅŸka bir uygulama tarafÄ±ndan kullanÄ±lÄ±yor.';
             break;
           case 'OverconstrainedError':
-            errorMessage = 'Mikrofon istenen ayarları desteklemiyor.';
+            errorMessage = 'Mikrofon istenen ayarlarÄ± desteklemiyor.';
             break;
         }
       }
@@ -601,111 +601,94 @@ export class AudioManager {
       });
     }
   }
+
+  /**
+   * Play audio chunk from OpenAI (Base64 PCM16)
+   */
+  async playAudioChunk(base64Delta: string): Promise<void> {
+    try {
+      if (!base64Delta || base64Delta.length === 0) {
+        return;
+      }
+      
+      const audioBuffer = this.convertBase64ToPCM16(base64Delta);
+      
+      // Create and configure audio source
+      if (!this.audioContext) {
+        throw new Error('AudioContext not available');
+      }
+      
+      const source = this.audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      
+      // Add gain control for volume
+      const gainNode = this.audioContext.createGain();
+      gainNode.gain.value = 0.8; // Slightly lower volume
+      
+      // Connect audio graph
+      source.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      // Play immediately
+      source.start(0);
+      
+      console.log('🔊 Playing OpenAI audio chunk:', {
+        duration: audioBuffer.duration.toFixed(3) + 's',
+        sampleRate: audioBuffer.sampleRate,
+        length: audioBuffer.length
+      });
+      
+    } catch (error) {
+      console.error('❌ Failed to play OpenAI audio chunk:', error);
+    }
+  }
+
+  /**
+   * Convert Base64 PCM16 to AudioBuffer
+   */
+  convertBase64ToPCM16(base64: string): AudioBuffer {
+    try {
+      // Decode base64
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Convert bytes to PCM16
+      const pcm16 = new Int16Array(bytes.buffer);
+      
+      // Create audio buffer (OpenAI uses 24kHz)
+      if (!this.audioContext) {
+        throw new Error('AudioContext not available');
+      }
+      
+      const audioBuffer = this.audioContext.createBuffer(1, pcm16.length, 24000);
+      const channelData = audioBuffer.getChannelData(0);
+      
+      // Convert int16 to float32
+      for (let i = 0; i < pcm16.length; i++) {
+        const sample = pcm16[i] || 0;
+        channelData[i] = sample / (sample < 0 ? 0x8000 : 0x7FFF);
+      }
+      
+      return audioBuffer;
+      
+    } catch (error) {
+      console.error('❌ Failed to convert Base64 to PCM16:', error);
+      // Return empty buffer as fallback
+      if (!this.audioContext) {
+        throw new Error('AudioContext not available for fallback');
+      }
+      return this.audioContext.createBuffer(1, 1, 24000);
+    }
+  }
 }
 
 // ============================================================================
 // Audio Utilities
 // ============================================================================
-
-export class AudioUtilsStatic {
-  /**
-   * Check if browser supports required audio features
-   */
-  static checkBrowserSupport(): {
-    supported: boolean;
-    missing: string[];
-  } {
-    const missing: string[] = [];
-
-    if (!window.AudioContext && !(window as any).webkitAudioContext) {
-      missing.push('Web Audio API');
-    }
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      missing.push('getUserMedia API');
-    }
-
-    if (!window.WebSocket) {
-      missing.push('WebSocket');
-    }
-
-    return {
-      supported: missing.length === 0,
-      missing
-    };
-  }
-
-  /**
-   * Request microphone permission proactively
-   */
-  static async requestMicrophonePermission(): Promise<boolean> {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Stop the stream immediately (we just wanted to check permission)
-      stream.getTracks().forEach(track => track.stop());
-      
-      return true;
-    } catch (error) {
-      console.error('Microphone permission check failed:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get available audio input devices
-   */
-  static async getAudioInputDevices(): Promise<MediaDeviceInfo[]> {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      return devices.filter(device => device.kind === 'audioinput');
-    } catch (error) {
-      console.error('Failed to enumerate audio devices:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Play audio from ArrayBuffer
-   */
-  static async playAudio(
-    audioContext: AudioContext, 
-    audioData: ArrayBuffer,
-    sampleRate: number = 24000
-  ): Promise<void> {
-    try {
-      // Create audio buffer
-      const audioBuffer = audioContext.createBuffer(
-        1, // mono
-        audioData.byteLength / 2, // 16-bit samples
-        sampleRate
-      );
-
-      // Convert PCM16 to Float32
-      const int16Array = new Int16Array(audioData);
-      const float32Array = audioBuffer.getChannelData(0);
-
-      for (let i = 0; i < int16Array.length; i++) {
-        if (int16Array && i < int16Array.length && int16Array[i] !== undefined) {
-          const value = int16Array[i]!;
-          float32Array[i] = value / 0x7FFF;
-        }
-      }
-
-      // Create source and play
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContext.destination);
-      source.start();
-
-    } catch (error) {
-      console.error('Failed to play audio:', error);
-      throw error;
-    }
-  }
-
-  // Instance methods removed from static class
-}
 
 /**
  * Audio utilities for PCM16 conversion and audio processing
@@ -751,11 +734,10 @@ export class AudioUtils {
       source.connect(this.audioContext.destination);
       source.start();
       
-      console.log('🔊 Playing audio chunk:', audioBuffer.duration, 'seconds');
+      console.log('🔊 Playing audio chunk:', audioBuffer.duration.toFixed(3) + 's');
       
     } catch (error) {
       console.error('❌ Failed to play audio chunk:', error);
     }
   }
 }
-
