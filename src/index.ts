@@ -18,6 +18,7 @@ import { authRoutes } from '@/routes/auth'
 import { quizRoutes } from '@/routes/quiz'
 import { adminRoutes } from '@/routes/admin'
 import { websocketRoutes } from '@/routes/websocket'
+import { leaderboardRoutes } from '@/routes/leaderboard'
 import { SecureToolHandler } from '@/services/SecureToolHandler'
 import { participants } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -84,6 +85,7 @@ app.get('/health', (c) => {
 app.route('/api/auth', authRoutes)
 app.route('/api/quiz', quizRoutes)
 app.route('/api/admin', adminRoutes)
+app.route('/api', leaderboardRoutes)
 
 // WebSocket route (at root level)
 app.route('/', websocketRoutes)
