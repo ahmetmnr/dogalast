@@ -18,6 +18,9 @@ import { authRoutes } from '@/routes/auth'
 import { quizRoutes } from '@/routes/quiz'
 import { adminRoutes } from '@/routes/admin'
 import { websocketRoutes } from '@/routes/websocket'
+import { SecureToolHandler } from '@/services/SecureToolHandler'
+import { participants } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 
 // Types
 import type { ContextVariables } from '@/types/api'
@@ -116,9 +119,104 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    binary += String.fromCharCode(bytes[i] as number);
   }
   return btoa(binary);
+}
+
+// OpenAI tool çağrılarını handle eden fonksiyon
+async function handleOpenAIToolCall(message: any, ws: any, userId: string) {
+  try {
+    if (message.type === 'response.function_call_done') {
+      const toolCall = message.function_call;
+      const toolName = toolCall.name;
+      const toolArgs = JSON.parse(toolCall.arguments || '{}');
+      
+      appLogger.info(`[openai-tool] User ${userId} calling tool: ${toolName}`, toolArgs);
+      
+      // Backend tool dispatch'e yönlendir
+      const toolResult = await executeToolForOpenAI(toolName, toolArgs, userId);
+      
+      // Sonucu OpenAI'ya gönder
+      if (ws.openaiConnection && ws.openaiConnection.readyState === WebSocket.OPEN) {
+        ws.openaiConnection.send(JSON.stringify({
+          type: 'conversation.item.create',
+          item: {
+            type: 'function_call_output',
+            call_id: toolCall.call_id,
+            output: JSON.stringify(toolResult)
+          }
+        }));
+      }
+      
+      // Frontend'e de bildir
+      ws.send(JSON.stringify({
+        type: 'tool_execution_result',
+        tool: toolName,
+        args: toolArgs,
+        result: toolResult,
+        timestamp: new Date().toISOString()
+      }));
+    }
+  } catch (error) {
+    appLogger.error('[openai-tool] Tool execution error:', error);
+  }
+}
+
+// OpenAI için tool execution
+async function executeToolForOpenAI(toolName: string, args: any, userId: string) {
+  try {
+    // Database connection
+    const db = createDatabaseConnection(env);
+    
+    // User bilgisini al
+    const user = await getUserById(db, userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    // SecureToolHandler ile tool'u çalıştır
+    const toolHandler = new SecureToolHandler(db, user);
+    
+    // Tool execution
+    const result = await toolHandler.executeTool(toolName, args, args.sessionId);
+    
+    appLogger.info(`[openai-tool] Tool ${toolName} executed successfully:`, result);
+    
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+    
+  } catch (error) {
+    appLogger.error(`[openai-tool] Tool ${toolName} execution failed:`, error);
+    
+    return {
+      success: false,
+      error: {
+        code: (error as any).code || 'TOOL_EXECUTION_FAILED',
+        message: (error as any).message || 'Tool execution failed'
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// User bilgisini ID ile getiren helper fonksiyon
+async function getUserById(db: any, userId: string) {
+  try {
+    const parsedUserId = parseInt(userId);
+    if (isNaN(parsedUserId)) {
+      throw new Error('Invalid user ID format');
+    }
+    
+    const users = await db.select().from(participants).where(eq(participants.id, parsedUserId));
+    return users[0] || null;
+  } catch (error) {
+    appLogger.error('Failed to get user by ID:', error);
+    return null;
+  }
 }
 
 appLogger.info('Zero Waste Quiz application started successfully')
@@ -196,8 +294,8 @@ export default {
               appLogger.warn(`[websocket] OpenAI connection not ready for ${data.type}`);
               // Send fallback response
               ws.send(JSON.stringify({
-                type: 'error',
-                error: {
+                type: 'server_error',
+                payload: {
                   code: 'OPENAI_NOT_CONNECTED',
                   message: 'OpenAI bağlantısı aktif değil'
                 }
@@ -268,31 +366,38 @@ export default {
         const sessionData = await sessionResponse.json() as any;
         const ephemeralToken = sessionData.client_secret.value;
         
-        // Now connect with ephemeral token
-        const openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2025-06-03`, [], {
-          headers: {
-            'Authorization': `Bearer ${ephemeralToken}`,
-            'OpenAI-Beta': 'realtime=v1'
-          }
-        });
+        // Now connect with ephemeral token (no headers in WebSocket constructor)
+        const openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2025-06-03`);
         
         ws.openaiConnection = openaiWs;
         
         openaiWs.onopen = () => {
           appLogger.info(`[websocket] OpenAI connection established for user ${userId}`);
           
-          // Configure OpenAI session with quiz-specific instructions
+          // Send authorization first
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
+              authorization: `Bearer ${ephemeralToken}`,
               modalities: ['text', 'audio'],
-              instructions: `Sen bir sıfır atık yarışması asistanısın. Görevin:
-1. Kullanıcıya soruları net ve anlaşılır Türkçe ile okumak
-2. Kullanıcının sesli cevaplarını dinlemek ve değerlendirmek
-3. Doğru/yanlış feedback vermek
-4. Yarışma skorunu takip etmek
+              instructions: `Sen bir sıfır atık yarışması asistanısın. Görevlerin:
 
-Şu anda aktif soru var. Kullanıcı "soruyu oku" dediğinde mevcut soruyu sesli olarak oku.`,
+1. SORU OKUMA: Kullanıcıya soruları net ve anlaşılır Türkçe ile oku
+2. CEVAP ALMA: Kullanıcının sesli cevabını dinle ve anla
+3. TOOL ÇAĞIRMA: Her işlem için uygun tool'u çağır
+4. YARIŞMA TAKİBİ: Skor, soru numarası, ilerleme takibi yap
+
+YARIŞMA AKIŞI:
+- Kullanıcı "yarışmaya başla" derse: startQuiz tool'unu çağır
+- Kullanıcı cevap verince: submitAnswer tool'unu çağır
+- Soru bitince: nextQuestion tool'unu çağır
+- 10 soru bitince: finishQuiz tool'unu çağır
+
+KURALLAR:
+- Her işlemde mutlaka ilgili tool'u çağır
+- Skor ve ilerleme bilgisini sürekli güncelle
+- Kullanıcıya cesaretlendirici geri bildirim ver
+- Sıfır atık konusunda bilgi ver`,
               voice: 'alloy',
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
@@ -306,27 +411,70 @@ export default {
               },
               tools: [
                 {
-                  type: "function",
-                  name: "read_current_question",
-                  description: "Mevcut aktif soruyu sesli olarak oku",
+                  type: 'function',
+                  name: 'startQuiz',
+                  description: 'Yarışmayı başlatır ve ilk soruyu getirir',
                   parameters: {
-                    type: "object",
-                    properties: {},
-                    additionalProperties: false
+                    type: 'object',
+                    properties: {
+                      sessionId: {
+                        type: 'string',
+                        description: 'Mevcut session ID (opsiyonel)'
+                      }
+                    }
                   }
                 },
                 {
-                  type: "function", 
-                  name: "evaluate_answer",
-                  description: "Kullanıcının cevabını değerlendir ve puan ver",
+                  type: 'function',
+                  name: 'submitAnswer',
+                  description: 'Kullanıcının cevabını değerlendirir ve puanlar',
                   parameters: {
-                    type: "object",
+                    type: 'object',
                     properties: {
-                      answer: { type: "string", description: "Kullanıcının cevabı" },
-                      isCorrect: { type: "boolean", description: "Cevap doğru mu" },
-                      points: { type: "number", description: "Kazanılan puan" }
+                      sessionQuestionId: {
+                        type: 'string', 
+                        description: 'Mevcut soru session ID'
+                      },
+                      userAnswer: {
+                        type: 'string',
+                        description: 'Kullanıcının verdiği cevap'
+                      },
+                      confidence: {
+                        type: 'number',
+                        description: 'Cevap güven skoru (0-1)'
+                      }
                     },
-                    required: ["answer", "isCorrect", "points"]
+                    required: ['sessionQuestionId', 'userAnswer']
+                  }
+                },
+                {
+                  type: 'function',
+                  name: 'nextQuestion',
+                  description: 'Sonraki soruya geçer',
+                  parameters: {
+                    type: 'object',
+                    properties: {
+                      sessionId: {
+                        type: 'string',
+                        description: 'Yarışma session ID'
+                      }
+                    },
+                    required: ['sessionId']
+                  }
+                },
+                {
+                  type: 'function',
+                  name: 'finishQuiz',
+                  description: 'Yarışmayı bitirir ve sonuçları gösterir',
+                  parameters: {
+                    type: 'object',
+                    properties: {
+                      sessionId: {
+                        type: 'string',
+                        description: 'Yarışma session ID'
+                      }
+                    },
+                    required: ['sessionId']
                   }
                 }
               ]
@@ -354,35 +502,27 @@ export default {
           }, 1000);
         };
         
-        openaiWs.onmessage = (event) => {
-          // Parse OpenAI message for timing events
+        // OpenAI'dan gelen mesajları handle et
+        openaiWs.onmessage = async (event) => {
           try {
-            const openaiData = JSON.parse(event.data);
+            const message = JSON.parse(event.data);
             
-            // Record timing events
-            switch (openaiData.type) {
-              case 'response.audio.delta':
-                console.log('🔊 TTS audio chunk');
-                break;
-                
-              case 'response.audio.done':
-                console.log('🔊 TTS completed - should record timing');
-                break;
-                
-              case 'input_audio_buffer.speech_started':
-                console.log('🎤 User speech started - should record timing');
-                break;
-                
-              case 'conversation.item.input_audio_transcription.completed':
-                console.log('📝 Answer transcribed - should record timing');
-                break;
+            // Tool çağrılarını handle et
+            if (message.type === 'response.function_call_delta' || message.type === 'response.function_call_done') {
+              await handleOpenAIToolCall(message, ws, userId);
             }
+            
+            // Timing events için log
+            if (['response.audio.delta', 'response.audio.done', 'input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped'].includes(message.type)) {
+              appLogger.info(`[websocket] OpenAI timing event: ${message.type}`);
+            }
+            
+            // Diğer mesajları frontend'e forward et
+            ws.send(event.data);
+            
           } catch (error) {
-            // Not JSON, might be binary
+            appLogger.error('[websocket] OpenAI message handling error:', error);
           }
-          
-          // Forward OpenAI messages to client
-          ws.send(event.data);
         };
         
         openaiWs.onclose = () => {

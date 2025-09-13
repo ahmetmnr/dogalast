@@ -11,12 +11,12 @@ export interface Env {
 }
 
 export class QuizSession {
-  private state: DurableObjectState;
+  // private state: DurableObjectState; // Unused for now
   private env: Env;
   private sessions: Map<WebSocket, any> = new Map();
 
-  constructor(state: DurableObjectState, env: Env) {
-    this.state = state;
+  constructor(_state: DurableObjectState, env: Env) {
+    // this.state = state; // Unused for now
     this.env = env;
   }
 
@@ -25,7 +25,9 @@ export class QuizSession {
     const [client, server] = Object.values(webSocketPair);
 
     // Accept WebSocket connection
-    server.accept();
+    if (server) {
+      server.accept();
+    }
 
     // Get token from URL
     const url = new URL(request.url);
@@ -40,31 +42,35 @@ export class QuizSession {
       const userId = this.extractUserIdFromToken(token);
       
       // Store session info
-      this.sessions.set(server, {
-        userId,
-        token,
-        connectedAt: new Date(),
-        openaiConnection: null
-      });
+      if (server) {
+        this.sessions.set(server, {
+          userId,
+          token,
+          connectedAt: new Date(),
+          openaiConnection: null
+        });
 
-      // Setup WebSocket handlers
-      server.addEventListener('message', async (event) => {
-        await this.handleWebSocketMessage(server, event.data);
-      });
+        // Setup WebSocket handlers
+        server.addEventListener('message', async (event) => {
+          await this.handleWebSocketMessage(server, event.data);
+        });
 
-      server.addEventListener('close', () => {
-        this.handleWebSocketClose(server);
-      });
+        server.addEventListener('close', () => {
+          this.handleWebSocketClose(server);
+        });
+      }
 
       // Send welcome message
-      server.send(JSON.stringify({
-        type: 'connection_established',
-        data: {
-          userId,
-          timestamp: new Date().toISOString(),
-          message: 'Durable Object WebSocket bağlantısı kuruldu'
-        }
-      }));
+      if (server) {
+        server.send(JSON.stringify({
+          type: 'connection_established',
+          data: {
+            userId,
+            timestamp: new Date().toISOString(),
+            message: 'Durable Object WebSocket bağlantısı kuruldu'
+          }
+        }));
+      }
 
       return new Response(null, {
         status: 101,
@@ -178,16 +184,11 @@ export class QuizSession {
         throw new Error('Failed to create OpenAI session');
       }
 
-      const data = await response.json() as any;
-      const ephemeralToken = data.client_secret.value;
+      // const data = await response.json() as any;
+      // const _ephemeralToken = data.client_secret.value; // Not needed for WebSocket
 
       // Create WebSocket connection to OpenAI
-      const openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2025-06-03', [], {
-        headers: {
-          'Authorization': `Bearer ${ephemeralToken}`,
-          'OpenAI-Beta': 'realtime=v1'
-        }
-      });
+      const openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2025-06-03');
 
       session.openaiConnection = openaiWs;
 
@@ -237,7 +238,9 @@ export class QuizSession {
   private extractUserIdFromToken(token: string): string {
     // Simplified JWT decode (in production, use proper JWT verification)
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const parts = token.split('.');
+      if (parts.length < 2 || !parts[1]) return 'unknown';
+      const payload = JSON.parse(atob(parts[1]));
       return payload.sub || 'unknown';
     } catch {
       return 'unknown';
@@ -248,7 +251,7 @@ export class QuizSession {
     const bytes = new Uint8Array(buffer);
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
+      binary += String.fromCharCode(bytes[i] as number);
     }
     return btoa(binary);
   }

@@ -45,3 +45,4 @@
 **Kullanıcı:** "Cam neden ayrı toplanır?" (bilgi sorusu)
 **Beklenen:** `quiz.infoLookup` çağrısı + kısa açıklama
 
+

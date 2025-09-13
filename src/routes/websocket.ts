@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import { JWTService } from '@/services/JWTService'
-import { createLogger } from '@/config/environment'
-import type { ContextWithAuth } from '@/types/auth'
-import type { UserContext } from '@/types/api'
+import { JWTService } from '../services/JWTService'
+import { createLogger } from '../config/environment'
+import type { ContextWithAuth } from '../types/auth'
+import type { UserContext } from '../types/api'
 
 const logger = createLogger('websocket')
 

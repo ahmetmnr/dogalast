@@ -38,7 +38,7 @@ export class WebRTCClient {
       const tokenData = await tokenResponse.json() as any;
       this.ephemeralToken = tokenData.data.token;
 
-      console.log('✅ Got ephemeral key:', this.ephemeralToken.substring(0, 10) + '...');
+      console.log('✅ Got ephemeral key:', this.ephemeralToken?.substring(0, 10) + '...');
       
       // RTCPeerConnection oluştur
       this.pc = new RTCPeerConnection({
@@ -91,8 +91,10 @@ export class WebRTCClient {
           document.body.appendChild(this.audioElement);
         }
 
-        this.audioElement.srcObject = stream;
-        this.config.onRemoteTrack?.(stream);
+        if (stream) {
+          this.audioElement.srcObject = stream;
+          this.config.onRemoteTrack?.(stream);
+        }
       };
 
       // Get user media for microphone

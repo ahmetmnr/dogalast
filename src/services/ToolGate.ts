@@ -13,18 +13,18 @@ export interface ToolGateResult {
 
 export class ToolGate {
   private static phaseToolMap: Record<QuizPhase, string[]> = {
-    greeting: ['quiz.startSession', 'quiz.nextQuestion'],
+    greeting: ['quiz_startSession', 'quiz_nextQuestion'],
     asking: [], // Sadece soru okunur, tool çağrısı yok
-    listening: ['quiz.reportIntent', 'quiz.submitAnswer', 'quiz.infoLookup'],
-    'post-score': ['quiz.nextQuestion', 'quiz.finishSession', 'quiz.getLeaderboard']
+    listening: ['quiz_reportIntent', 'quiz_submitAnswer', 'quiz_infoLookup'],
+    'post-score': ['quiz_nextQuestion', 'quiz_finishSession', 'quiz_getLeaderboard']
   };
 
   private static phaseTransitions: Record<string, QuizPhase> = {
-    'quiz.startSession': 'asking',
-    'quiz.nextQuestion': 'asking',
-    'quiz.submitAnswer': 'post-score',
-    'quiz.infoLookup': 'post-score',
-    'quiz.finishSession': 'greeting'
+    'quiz_startSession': 'asking',
+    'quiz_nextQuestion': 'asking',
+    'quiz_submitAnswer': 'post-score',
+    'quiz_infoLookup': 'post-score',
+    'quiz_finishSession': 'greeting'
   };
 
   /**

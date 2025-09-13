@@ -3,25 +3,23 @@
  * Loads test data into the database
  */
 
-import { createDatabase, db as dbHelpers } from '../src/db/connection';
+import { createDatabaseConnection, type DatabaseInstance } from '../src/db/connection';
 import * as schema from '../src/db/schema';
-import { Logger } from '../src/utils/logger';
+import { createLogger, type Env } from '../src/config/environment';
 import { eq, sql } from 'drizzle-orm';
+
+const Logger = createLogger('seed-db');
 
 // Import seed data
 import questionsData from '../src/db/seeds/questions.json';
 import knowledgeData from '../src/db/seeds/knowledge-base.json';
-
-// Types
-import type { DatabaseInstance } from '../src/db/connection';
-import type { Env } from '../src/index';
 
 /**
  * Seed database with test data
  * @param env Environment configuration
  */
 async function seedDatabase(env: Env) {
-  const db = createDatabase(env);
+  const db = createDatabaseConnection(env);
   
   try {
     Logger.info('Starting database seeding...');
@@ -239,13 +237,13 @@ if (import.meta.main) {
   async function run() {
     try {
       if (shouldClean) {
-        await cleanDatabase(createDatabase(mockEnv as Env));
+        await cleanDatabase(createDatabaseConnection(mockEnv as Env));
       }
       
       await seedDatabase(mockEnv as Env);
       
       if (shouldVerify) {
-        await verifySeedingResults(createDatabase(mockEnv as Env));
+        await verifySeedingResults(createDatabaseConnection(mockEnv as Env));
       }
       
       process.exit(0);

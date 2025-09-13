@@ -48,7 +48,7 @@ ${audioPrompt}
     return [
       {
         type: "function",
-        name: "quiz.nextQuestion",
+        name: "quiz_nextQuestion",
         description: "Sıradaki soruya geç ve oku",
         parameters: {
           type: "object",
@@ -60,7 +60,7 @@ ${audioPrompt}
       },
       {
         type: "function",
-        name: "quiz.submitAnswer", 
+        name: "quiz_submitAnswer", 
         description: "Kullanıcının cevabını değerlendir ve puan ver",
         parameters: {
           type: "object",
@@ -74,7 +74,7 @@ ${audioPrompt}
       },
       {
         type: "function",
-        name: "quiz.markTtsEnd",
+        name: "quiz_markTtsEnd",
         description: "TTS bittiğini işaretle",
         parameters: {
           type: "object", 

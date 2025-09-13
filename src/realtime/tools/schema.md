@@ -1,6 +1,6 @@
 # Quiz Tool Şemaları
 
-## quiz.startSession
+## quiz_startSession
 **Params:**
 - `participantId: number`
 
@@ -8,7 +8,7 @@
 - `sessionId: number`
 - `greeting: string`
 
-## quiz.nextQuestion  
+## quiz_nextQuestion  
 **Params:**
 - `sessionId: number`
 
@@ -19,7 +19,7 @@
 - `basePoints: number`
 - `tLimitSec: number`
 
-## quiz.reportIntent
+## quiz_reportIntent
 **Params:**
 - `sessionQuestionId: number`
 - `utterance: string`
@@ -29,7 +29,7 @@
 **Return:**
 - `accepted: boolean`
 
-## quiz.markTtsEnd
+## quiz_markTtsEnd
 **Params:**
 - `sessionQuestionId: number`
 - `ttsEndedAt: string` (ISO string)
@@ -37,7 +37,7 @@
 **Return:**
 - `ok: true`
 
-## quiz.markSpeechStart
+## quiz_markSpeechStart
 **Params:**
 - `sessionQuestionId: number`
 - `speechStartedAt: string` (ISO string)
@@ -45,7 +45,7 @@
 **Return:**
 - `ok: true`
 
-## quiz.submitAnswer
+## quiz_submitAnswer
 **Params:**
 - `sessionQuestionId: number`
 - `answeredAt: string` (ISO string)
@@ -59,7 +59,7 @@
 - `earnedPoints: number`
 - `totalPoints: number`
 
-## quiz.infoLookup
+## quiz_infoLookup
 **Params:**
 - `query: string`
 - `maxSentences?: number`
@@ -68,14 +68,14 @@
 - `answer: string`
 - `sourceId?: string`
 
-## quiz.getLeaderboard
+## quiz_getLeaderboard
 **Params:**
 - `limit?: number`
 
 **Return:**
 - `items: Array<{name: string, points: number}>`
 
-## quiz.finishSession
+## quiz_finishSession
 **Params:**
 - `sessionId: number`
 

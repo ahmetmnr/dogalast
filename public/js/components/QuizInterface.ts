@@ -4,7 +4,7 @@
  */
 
 import { AudioManager, AudioUtils, type AudioEvent } from '../core/AudioManager';
-import { RealtimeClient, type RealtimeConfig, type ConnectionState } from '../core/RealtimeClient';
+import { RealtimeClient } from '../core/RealtimeClient';
 import { WebSocketEventHelper } from '../core/WebSocketManager';
 import { api, apiClient } from '../core/ApiClient';
 
@@ -347,32 +347,6 @@ export class QuizInterface {
     (this as any).webrtcClient = webrtcClient;
   }
 
-  private async initializeRealtimeConnectionOLD(): Promise<void> {
-    if (!this.quizState.sessionId) {
-      throw new Error('Session ID required for realtime connection');
-    }
-
-    const realtimeConfig: RealtimeConfig = {
-      model: 'gpt-4o-realtime-preview-2025-06-03',
-      voice: 'alloy',
-      sessionId: this.quizState.sessionId,
-      onAudioReceived: (audioData: ArrayBuffer) => {
-        this.handleRealtimeAudio(audioData);
-      },
-      onTranscriptReceived: (transcript: string, isFinal: boolean) => {
-        this.handleRealtimeTranscript(transcript, isFinal);
-      },
-      onConnectionStateChange: (state: ConnectionState) => {
-        this.handleRealtimeConnectionChange(state);
-      },
-      onError: (error: any) => {
-        this.handleRealtimeError(error);
-      }
-    };
-
-    this.realtimeClient = new RealtimeClient(realtimeConfig);
-    await this.realtimeClient.connect();
-  }
 
   /**
    * Setup audio event listeners
@@ -609,13 +583,13 @@ export class QuizInterface {
       this.updateUI();
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = async (event: any) => {
       const result = event.results[event.results.length - 1];
       const transcript = result.transcript;
       
       if (result.isFinal) {
         console.log('🗣️ User answer:', transcript);
-        this.handleUserAnswer(transcript);
+        await this.handleUserAnswer(transcript);
       } else {
         console.log('🗣️ Interim result:', transcript);
       }
@@ -655,9 +629,9 @@ export class QuizInterface {
 
       // Submit answer via API
       const response = await api.tools.submitAnswer(
-        this.quizState.sessionId || '',
         this.quizState.currentQuestion.sessionQuestionId,
-        transcript
+        transcript,
+        0.8 // confidence
       );
 
       if (response.success) {
@@ -667,7 +641,7 @@ export class QuizInterface {
         
         // Wait 3 seconds then next question
         setTimeout(async () => {
-          await this.nextQuestion();
+          await this.loadNextQuestion();
         }, 3000);
       }
 
@@ -677,66 +651,34 @@ export class QuizInterface {
     }
   }
 
+  // Realtime handlers removed for now to fix syntax errors
+
   /**
-   * Handle realtime audio from OpenAI
+   * Load next question
    */
-  private async handleRealtimeAudio(audioData: ArrayBuffer): Promise<void> {
+  private async loadNextQuestion(): Promise<void> {
     try {
-      console.log('🔊 Playing realtime audio, size:', audioData.byteLength);
-      
-      // For testing, play a simple beep sound
-      const audioContext = this.audioManager.getAudioContext();
-      if (audioContext) {
-        // Create a simple test tone
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+      const response = await api.tools.nextQuestion(this.quizState.sessionId || '');
+      if (response.success && response.data) {
+        this.quizState.currentQuestion = response.data;
+        this.updateUI();
         
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A note
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
-        
-        console.log('🔊 Test tone played');
+        // Start listening for answer after a brief delay
+        setTimeout(() => {
+          this.startListeningForAnswer();
+        }, 1000);
+      } else {
+        // Quiz finished
+        console.log('✅ Quiz completed');
+        this.showStatus('Yarışma tamamlandı!');
       }
     } catch (error) {
-      console.error('Failed to play realtime audio:', error);
+      console.error('Failed to load next question:', error);
+      this.handleError(error);
     }
   }
 
-  /**
-   * Handle realtime transcript from OpenAI
-   */
-  private handleRealtimeTranscript(transcript: string, isFinal: boolean): void {
-    console.log('Realtime transcript:', transcript, 'Final:', isFinal);
-
-    if (isFinal && transcript.trim()) {
-      // Submit the transcript as an answer
-      this.submitAnswer(transcript.trim(), 0.9).catch(error => {
-        console.error('Failed to submit transcript answer:', error);
-      });
-    }
-  }
-
-  /**
-   * Handle realtime connection state changes
-   */
-  private handleRealtimeConnectionChange(state: ConnectionState): void {
-    console.log('Realtime connection state:', state);
-    this.updateConnectionStatus(state);
-  }
-
-  /**
-   * Handle realtime errors
-   */
-  private handleRealtimeError(error: any): void {
-    console.error('Realtime error:', error);
-    this.handleError(error);
-  }
+  // handleRealtimeError removed (unused)
 
   /**
    * Handle quiz events from WebSocket

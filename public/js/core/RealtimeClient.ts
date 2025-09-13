@@ -277,7 +277,7 @@ export class RealtimeClient {
    */
   private async refreshEphemeralToken(): Promise<void> {
     try {
-      const response = await apiClient.get(`/api/quiz/realtime/token?sessionId=${this.config.sessionId}`);
+      const response = await apiClient.post(`/api/quiz/realtime/ephemeral-token?sessionId=${this.config.sessionId}`);
 
       if (response.success && response.data) {
         this.ephemeralToken = (response.data as any).token;

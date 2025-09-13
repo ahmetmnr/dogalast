@@ -11,16 +11,16 @@ import {
   questions,
   systemSettings,
   auditLogs
-} from '@/db/schema';
+} from '../db/schema';
 import { TimingService } from './TimingService';
 import { ScoringService } from './ScoringService';
 import { PrivacyService } from './PrivacyService';
 import { KnowledgeService } from './KnowledgeService';
-import { Logger } from '@/utils/logger';
-import { AppError, ErrorCode } from '@/types/errors';
+import { Logger } from '../utils/logger';
+import { AppError, ErrorCode } from '../types/errors';
 
-import type { DatabaseInstance } from '@/db/connection';
-import type { UserContext } from '@/middleware/RoleMiddleware';
+import type { DatabaseInstance } from '../db/connection';
+import type { UserContext } from '../middleware/RoleMiddleware';
 
 /**
  * Tool definition interface
@@ -53,7 +53,7 @@ interface IdempotencyRecord {
 export class ToolExecutionError extends AppError {
   constructor(
     message: string,
-    code: string = 'TOOL_EXECUTION_ERROR',
+    code: ErrorCode = ErrorCode.INTERNAL_SERVER_ERROR,
     statusCode: number = 400
   ) {
     super(code, message, statusCode);
@@ -176,7 +176,7 @@ export class SecureToolHandler {
     if (!toolDef) {
       throw new ToolExecutionError(
         `Bilinmeyen tool: ${toolName}`,
-        'UNKNOWN_TOOL',
+        ErrorCode.NOT_FOUND,
         400
       );
     }
@@ -185,7 +185,7 @@ export class SecureToolHandler {
     if (!toolDef.validator(args)) {
       throw new ToolExecutionError(
         'Geçersiz tool parametreleri',
-        'INVALID_TOOL_ARGS',
+        ErrorCode.BAD_REQUEST,
         400
       );
     }
@@ -194,7 +194,7 @@ export class SecureToolHandler {
     if (toolDef.requiresSession && !sessionId) {
       throw new ToolExecutionError(
         'Bu tool için session ID gerekli',
-        'SESSION_REQUIRED',
+        ErrorCode.BAD_REQUEST,
         400
       );
     }
@@ -206,7 +206,7 @@ export class SecureToolHandler {
       if (!sessionState) {
         throw new ToolExecutionError(
           'Session bulunamadı',
-          'SESSION_NOT_FOUND',
+          ErrorCode.SESSION_NOT_FOUND,
           404
         );
       }
@@ -214,7 +214,7 @@ export class SecureToolHandler {
       if (sessionState.participantId !== parseInt(this.user.id)) {
         throw new ToolExecutionError(
           'Bu session size ait değil',
-          'SESSION_ACCESS_DENIED',
+          ErrorCode.FORBIDDEN,
           403
         );
       }
@@ -223,7 +223,7 @@ export class SecureToolHandler {
           !toolDef.allowedStates.includes(sessionState.status)) {
         throw new ToolExecutionError(
           `Tool bu session durumunda kullanılamaz: ${sessionState.status}`,
-          'INVALID_SESSION_STATE',
+          ErrorCode.SESSION_INVALID,
           400
         );
       }
@@ -282,11 +282,11 @@ export class SecureToolHandler {
       const existingSession = existingSessionResult[0];
       
       return {
-        sessionId: existingSession.id,
+        sessionId: existingSession?.id || '',
         currentQuestion: null, // Will be loaded separately
-        totalScore: existingSession.totalScore,
-        questionIndex: existingSession.currentQuestionIndex,
-        questionsAnswered: existingSession.questionsAnswered
+        totalScore: existingSession?.totalScore || 0,
+        questionIndex: existingSession?.currentQuestionIndex || 0,
+        questionsAnswered: existingSession?.questionsAnswered || 0
       };
     }
 
@@ -330,7 +330,7 @@ export class SecureToolHandler {
     const session = await this.getSessionState(sessionId);
 
     if (!session) {
-      throw new ToolExecutionError('Session bulunamadı', 'SESSION_NOT_FOUND', 404);
+      throw new ToolExecutionError('Session bulunamadı', ErrorCode.SESSION_NOT_FOUND, 404);
     }
 
     const nextIndex = session.currentQuestionIndex + 1;
@@ -339,7 +339,7 @@ export class SecureToolHandler {
     if (nextIndex >= maxQuestions) {
       throw new ToolExecutionError(
         'Tüm sorular tamamlandı',
-        'ALL_QUESTIONS_COMPLETED',
+        ErrorCode.QUIZ_COMPLETED,
         400
       );
     }
@@ -431,7 +431,7 @@ export class SecureToolHandler {
     if (!questionInfo) {
       throw new ToolExecutionError(
         'Soru bilgisi bulunamadı',
-        'QUESTION_NOT_FOUND',
+        ErrorCode.QUESTION_NOT_FOUND,
         404
       );
     }
@@ -448,7 +448,7 @@ export class SecureToolHandler {
     if (responseTime === null) {
       throw new ToolExecutionError(
         'Yanıt süresi hesaplanamadı',
-        'RESPONSE_TIME_CALCULATION_FAILED',
+        ErrorCode.INTERNAL_SERVER_ERROR,
         500
       );
     }
@@ -666,7 +666,7 @@ export class SecureToolHandler {
     if (!question) {
       throw new ToolExecutionError(
         'Soru bulunamadı',
-        'QUESTION_NOT_FOUND',
+        ErrorCode.QUESTION_NOT_FOUND,
         404
       );
     }
@@ -770,7 +770,7 @@ export class SecureToolHandler {
     if (!result || result.length === 0) {
       throw new ToolExecutionError(
         'Question not found',
-        'QUESTION_NOT_FOUND',
+        ErrorCode.QUESTION_NOT_FOUND,
         404
       );
     }
@@ -779,7 +779,7 @@ export class SecureToolHandler {
     if (!questionData) {
       throw new ToolExecutionError(
         'Question not found',
-        'QUESTION_NOT_FOUND',
+        ErrorCode.QUESTION_NOT_FOUND,
         404
       );
     }
