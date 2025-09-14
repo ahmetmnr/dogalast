@@ -1,21 +1,28 @@
 import { Hono } from 'hono'
-import { PromptBuilder } from '@/services/PromptBuilder'
+import { PromptBuilder } from '../services/PromptBuilder'
+import { sql, desc, asc, eq, isNotNull } from 'drizzle-orm'
 
 // Services
-import { SecureToolHandler } from '@/services/SecureToolHandler'
+import { SecureToolHandler } from '../services/SecureToolHandler'
 
 // Middleware
-import { ValidationMiddleware, schemas } from '@/middleware/validation'
-import { AuthMiddleware, getAuthenticatedUser } from '@/middleware/auth'
+import { ValidationMiddleware, schemas } from '../middleware/validation'
+import { AuthMiddleware, getAuthenticatedUser } from '../middleware/auth'
 
 // Types
-import type { AppContext, ToolDispatchRequest } from '@/types/api'
-import { ErrorCode, AppError } from '@/types/errors'
+import type { AppContext, ToolDispatchRequest } from '../types/api'
+import { ErrorCode, AppError } from '../types/errors'
+
+// Database Schema
+import { participants, quizSessions } from '../db/schema'
 
 // Utils
-import { createLogger } from '@/config/environment'
+import { createLogger } from '../config/environment'
 
 const logger = createLogger('quiz-routes')
+
+// Session-based ephemeral token cache to prevent duplicate OpenAI sessions
+const ephemeralTokenCache = new Map<string, { token: string, expiresAt: number }>();
 
 // Create router
 const router = new Hono<{ Variables: any }>()
@@ -83,6 +90,17 @@ router.post('/realtime/ephemeral-token', async (c: AppContext) => {
       return c.json({ success: false, error: { code: 'MISSING_SESSION_ID', message: 'Session ID required' } }, 400)
     }
     
+    // Check if we already have a valid token for this session
+    const cached = ephemeralTokenCache.get(sessionId);
+    if (cached && cached.expiresAt > Date.now()) {
+      console.log('🔄 Reusing cached ephemeral token for session:', sessionId);
+      return c.json({
+        success: true,
+        data: { token: cached.token },
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     // Call OpenAI API to create ephemeral token
     const openaiApiKey = process.env['OPENAI_API_KEY']
     if (!openaiApiKey) {
@@ -123,12 +141,19 @@ router.post('/realtime/ephemeral-token', async (c: AppContext) => {
     const data = await response.json() as any
     console.log('OpenAI API response:', JSON.stringify(data, null, 2))
     
+    const token = data.client_secret?.value || data.token || 'fallback-token';
+    const expiresAt = data.client_secret?.expires_at ? (data.client_secret.expires_at * 1000) : (Date.now() + 3600000);
+    
+    // Cache the token for this session
+    ephemeralTokenCache.set(sessionId, { token, expiresAt });
+    console.log('💾 Cached ephemeral token for session:', sessionId);
+    
     return c.json({
       success: true,
       data: {
-        token: data.client_secret?.value || data.token || 'fallback-token',
+        token,
         sessionId,
-        expiresIn: data.client_secret?.expires_at ? (data.client_secret.expires_at - Math.floor(Date.now() / 1000)) : 3600
+        expiresIn: Math.floor((expiresAt - Date.now()) / 1000)
       }
     })
   } catch (error) {
@@ -216,5 +241,39 @@ router.get('/realtime/proxy', async (c) => {
     return c.text('Failed to create proxy connection', 500);
   }
 })
+
+// Leaderboard endpoint
+router.get('/leaderboard', async (c: AppContext) => {
+  try {
+    const { limit = 10, offset = 0 } = c.req.query();
+    const db = c.get('db');
+    
+    const leaderboard = await db
+      .select()
+      .from(participants)
+      .leftJoin(quizSessions, eq(participants.id, quizSessions.participantId))
+      .where(isNotNull(quizSessions.completedAt))
+      .orderBy(
+        desc(sql`COALESCE(${quizSessions.totalScore}, 0)`),
+        asc(quizSessions.completedAt),
+        asc(quizSessions.lastActivityAt)
+      )
+      .limit(parseInt(limit as string))
+      .offset(parseInt(offset as string));
+
+    return c.json({
+      success: true,
+      data: { leaderboard },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Leaderboard error:', error);
+    return c.json({
+      success: false,
+      error: { code: 'LEADERBOARD_ERROR', message: 'Failed to fetch leaderboard' }
+    }, 500);
+  }
+});
 
 export { router as quizRoutes }

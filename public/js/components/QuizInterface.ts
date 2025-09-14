@@ -20,6 +20,7 @@ interface QuizState {
   isActive: boolean;
   isWaitingForAnswer: boolean;
   currentSessionQuestionId: string | null;
+  currentQuestionStartTime?: number;
 }
 
 interface QuizConfig {
@@ -124,6 +125,7 @@ export class QuizInterface {
       const response = await api.tools.startQuiz(this.quizState.sessionId || undefined);
 
       if (response.success && response.data) {
+        console.log('Quiz started, response data:', response.data);
         this.quizState.sessionId = response.data.sessionId;
         this.quizState.currentQuestion = response.data.currentQuestion;
         this.quizState.totalScore = response.data.totalScore;
@@ -161,9 +163,13 @@ export class QuizInterface {
         // Save sessionId to localStorage
         localStorage.setItem('currentSessionId', response.data.sessionId);
 
-        // Initialize WebRTC connection to OpenAI Realtime API
-        await this.initializeWebRTCConnection();
-        console.log('✅ WebRTC OpenAI connection initialized');
+        // Initialize WebRTC connection to OpenAI Realtime API (only if not already connected)
+        if (!this.webrtcClient) {
+          await this.initializeWebRTCConnection();
+          console.log('✅ WebRTC OpenAI connection initialized');
+        } else {
+          console.log('ℹ️ WebRTC connection already exists, reusing');
+        }
 
         // Start audio recording
         await this.audioManager.startRecording();
@@ -174,6 +180,7 @@ export class QuizInterface {
         // Present first question
         await this.presentCurrentQuestion();
 
+        this.updateUI();
         this.updateUIEnhanced();
         this.notifyStateChange();
 
@@ -209,7 +216,8 @@ export class QuizInterface {
         this.quizState.currentSessionQuestionId,
         answer,
         confidence,
-        Date.now()
+        Date.now(),
+        this.quizState.sessionId || undefined
       );
 
       if (response.success && response.data) {
@@ -535,8 +543,23 @@ export class QuizInterface {
         console.log('🔊 TTS started:', text);
       };
       
-      utterance.onend = () => {
+      utterance.onend = async () => {
         console.log('🔊 TTS completed');
+
+        // Mark TTS end for timer calculation
+        if (this.quizState.currentQuestion?.sessionQuestionId) {
+          try {
+            await api.tools.markTTSEnd(
+              this.quizState.currentQuestion.sessionQuestionId,
+              Date.now(),
+              this.quizState.sessionId || undefined
+            );
+            console.log('✅ TTS end marked for timer calculation');
+          } catch (error) {
+            console.error('❌ Failed to mark TTS end:', error);
+          }
+        }
+
         // Start listening for user answer
         this.startListeningForAnswer();
         this.updateUIEnhanced();
@@ -614,16 +637,26 @@ export class QuizInterface {
   private async handleUserAnswer(transcript: string): Promise<void> {
     try {
       console.log('📝 Processing answer:', transcript);
-      
+      console.log('📝 Current question state:', {
+        currentQuestion: this.quizState.currentQuestion,
+        sessionQuestionId: this.quizState.currentQuestion?.sessionQuestionId
+      });
+
       if (!this.quizState.currentQuestion) {
         throw new Error('No active question');
+      }
+
+      if (!this.quizState.currentQuestion.sessionQuestionId) {
+        throw new Error('No session question ID');
       }
 
       // Submit answer via API
       const response = await api.tools.submitAnswer(
         this.quizState.currentQuestion.sessionQuestionId,
         transcript,
-        0.8 // confidence
+        0.8, // confidence
+        Date.now(), // clientTimestamp
+        this.quizState.sessionId || undefined // sessionId
       );
 
       if (response.success) {
@@ -652,7 +685,10 @@ export class QuizInterface {
     try {
       const response = await api.tools.nextQuestion(this.quizState.sessionId || '');
       if (response.success && response.data) {
-        this.quizState.currentQuestion = response.data;
+        this.quizState.currentQuestion = response.data.currentQuestion;
+        this.quizState.questionIndex = response.data.questionIndex || this.quizState.questionIndex + 1;
+        this.quizState.currentSessionQuestionId = response.data.currentQuestion?.sessionQuestionId;
+        this.updateUI();
         this.updateUIEnhanced();
         
         // Start listening for answer after a brief delay
@@ -805,15 +841,27 @@ export class QuizInterface {
    */
   private async handleTTSEnd(): Promise<void> {
     try {
+      // Mark TTS end and start question timer
       if (this.quizState.currentQuestion?.sessionQuestionId) {
         await api.tools.markTTSEnd(
           this.quizState.currentQuestion.sessionQuestionId,
           Date.now(),
           this.quizState.sessionId || undefined
         );
+
+        // Start question timer
+        this.quizState.currentQuestionStartTime = Date.now();
+        console.log('🕒 Timer started at:', this.quizState.currentQuestionStartTime);
+
+        // Update UI to show timer started
+        this.updateUIEnhanced();
+
+        console.log('✅ TTS ended, question timer started');
+      } else {
+        console.warn('⚠️ No sessionQuestionId available for TTS end handling');
       }
     } catch (error) {
-      console.error('❌ Failed to mark TTS end:', error);
+      console.error('❌ Failed to handle TTS end:', error);
     }
   }
 
@@ -931,6 +979,15 @@ export class QuizInterface {
             <h3 class="question-text" id="question-text">
               Yarışma başlatılmaya hazır...
             </h3>
+            <div class="question-options" id="question-options">
+              <!-- Soru seçenekleri burada gösterilecek -->
+            </div>
+
+            <!-- Test Input for Manual Answer -->
+            <div class="manual-answer" id="manual-answer" style="margin-top: 20px;">
+              <input type="text" id="answer-input" placeholder="Cevabınızı yazın (test için)" style="padding: 10px; width: 200px;">
+              <button id="submit-answer-btn" style="padding: 10px; margin-left: 10px;">Cevap Gönder</button>
+            </div>
           </div>
         </div>
 
@@ -980,12 +1037,38 @@ export class QuizInterface {
     (window as any).startQuiz = () => this.startQuiz();
     (window as any).finishQuiz = () => this.finishQuiz();
     (window as any).recalibrateAudio = () => this.recalibrateAudio();
+
+    // Add manual answer submission for testing
+    const submitBtn = document.getElementById('submit-answer-btn');
+    const answerInput = document.getElementById('answer-input') as HTMLInputElement;
+
+    if (submitBtn && answerInput) {
+      submitBtn.addEventListener('click', async () => {
+        const answer = answerInput.value.trim();
+        if (answer) {
+          await this.handleUserAnswer(answer);
+          answerInput.value = '';
+        }
+      });
+
+      answerInput.addEventListener('keypress', async (e) => {
+        if (e.key === 'Enter') {
+          const answer = answerInput.value.trim();
+          if (answer) {
+            await this.handleUserAnswer(answer);
+            answerInput.value = '';
+          }
+        }
+      });
+    }
   }
 
   /**
    * Update UI based on current state
    */
   private updateUI(): void {
+    console.log('updateUI called with state:', this.quizState);
+
     // Update score
     const scoreElement = document.getElementById('score-value');
     if (scoreElement) {
@@ -995,6 +1078,12 @@ export class QuizInterface {
     // Update question
     const questionNumberElement = document.getElementById('question-number');
     const questionTextElement = document.getElementById('question-text');
+
+    console.log('Question elements found:', {
+      questionNumber: !!questionNumberElement,
+      questionText: !!questionTextElement,
+      currentQuestion: !!this.quizState.currentQuestion
+    });
     
     if (questionNumberElement && this.quizState.currentQuestion) {
       questionNumberElement.textContent = `Soru ${this.quizState.questionIndex + 1}`;
@@ -1002,6 +1091,18 @@ export class QuizInterface {
     
     if (questionTextElement && this.quizState.currentQuestion) {
       questionTextElement.textContent = this.quizState.currentQuestion.text;
+    }
+
+    // Update options
+    const optionsElement = document.getElementById('question-options');
+    if (optionsElement && this.quizState.currentQuestion && this.quizState.currentQuestion.options) {
+      optionsElement.innerHTML = this.quizState.currentQuestion.options
+        .map((option: string, index: number) => `
+          <div class="option-item">
+            <span class="option-letter">${String.fromCharCode(65 + index)}</span>
+            <span class="option-text">${option}</span>
+          </div>
+        `).join('');
     }
 
     // Update buttons
@@ -1025,87 +1126,61 @@ export class QuizInterface {
   /**
    * Animate score increase with smooth transition
    */
-  private animateScoreIncrease(fromScore: number, toScore: number): void {
-    const scoreElement = document.getElementById('score-value');
+  private animateScoreIncrease(oldScore: number, newScore: number): void {
+    const scoreElement = document.getElementById('current-score') || document.getElementById('score-value');
     if (!scoreElement) return;
     
-    const duration = 1000; // 1 second animation
-    const startTime = Date.now();
-    const scoreDiff = toScore - fromScore;
+    const difference = newScore - oldScore;
+    const duration = 1000; // 1 second
+    const steps = 20;
+    const stepValue = difference / steps;
+    const stepDuration = duration / steps;
     
-    // Add visual feedback
-    scoreElement.style.transition = 'all 0.3s ease';
-    scoreElement.style.color = '#4CAF50'; // Green for positive score
-    
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Easing function for smooth animation
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-      const currentScore = Math.round(fromScore + (scoreDiff * easeOut));
-      
+    let currentStep = 0;
+    const interval = setInterval(() => {
+      currentStep++;
+      const currentScore = Math.round(oldScore + (stepValue * currentStep));
       scoreElement.textContent = currentScore.toString();
-      scoreElement.style.transform = `scale(${1 + (0.2 * Math.sin(progress * Math.PI))})`;
       
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
+      // Add visual feedback
+      scoreElement.style.color = '#4CAF50';
+      scoreElement.style.transform = `scale(${1 + (0.1 * Math.sin(currentStep / steps * Math.PI))})`;
+      
+      if (currentStep >= steps) {
+        clearInterval(interval);
+        scoreElement.textContent = newScore.toString();
         scoreElement.style.transform = 'scale(1)';
-        scoreElement.style.color = ''; // Reset color
+        scoreElement.style.color = '';
         
-        // Show score increase indicator
-        this.showScoreIncrease(scoreDiff);
+        // Show score increase animation
+        const increaseElement = document.createElement('div');
+        increaseElement.className = 'score-increase';
+        increaseElement.textContent = `+${difference}`;
+        increaseElement.style.cssText = `
+          position: absolute;
+          top: -30px;
+          right: 0;
+          background: #4CAF50;
+          color: white;
+          padding: 4px 8px;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: bold;
+          z-index: 1000;
+          animation: scoreIncrease 2s ease-out forwards;
+        `;
+        
+        if (scoreElement.parentElement) {
+          scoreElement.parentElement.style.position = 'relative';
+          scoreElement.parentElement.appendChild(increaseElement);
+        }
+        
+        setTimeout(() => increaseElement.remove(), 2000);
       }
-    };
-    
-    animate();
+    }, stepDuration);
   }
 
-  /**
-   * Show score increase indicator
-   */
-  private showScoreIncrease(points: number): void {
-    const indicator = document.createElement('div');
-    indicator.className = 'score-increase-indicator';
-    indicator.textContent = `+${points}`;
-    indicator.style.cssText = `
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: #4CAF50;
-      color: white;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-weight: bold;
-      z-index: 1000;
-      animation: scoreIncrease 2s ease-out forwards;
-    `;
-    
-    // Add CSS animation
-    if (!document.getElementById('score-animation-style')) {
-      const style = document.createElement('style');
-      style.id = 'score-animation-style';
-      style.textContent = `
-        @keyframes scoreIncrease {
-          0% { opacity: 0; transform: translateY(20px) scale(0.8); }
-          20% { opacity: 1; transform: translateY(0) scale(1.1); }
-          80% { opacity: 1; transform: translateY(-10px) scale(1); }
-          100% { opacity: 0; transform: translateY(-30px) scale(0.9); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
-    document.body.appendChild(indicator);
-    
-    // Remove after animation
-    setTimeout(() => {
-      if (indicator.parentNode) {
-        indicator.parentNode.removeChild(indicator);
-      }
-    }, 2000);
-  }
+  // showScoreIncrease method removed (integrated into animateScoreIncrease)
   
   /**
    * Update progress bar with smooth animation
@@ -1269,10 +1344,59 @@ export class QuizInterface {
    * Enhanced updateUI with real-time data binding
    */
   private updateUIEnhanced(): void {
-    // Call original updateUI
-    this.updateUI();
+    console.log('updateUIEnhanced called with state:', this.quizState);
+
+    // Score display
+    const scoreElement = document.getElementById('score-value');
+    if (scoreElement) {
+      scoreElement.textContent = this.quizState.totalScore.toString();
+    }
+
+    // Question display
+    const questionElement = document.getElementById('question-text');
+    const questionNumberElement = document.getElementById('question-number');
+    const optionsElement = document.getElementById('question-options');
+
+    console.log('Enhanced UI elements found:', {
+      questionElement: !!questionElement,
+      questionNumberElement: !!questionNumberElement,
+      optionsElement: !!optionsElement,
+      hasCurrentQuestion: !!this.quizState.currentQuestion,
+      questionData: this.quizState.currentQuestion
+    });
+
+    if (questionElement && this.quizState.currentQuestion) {
+      questionElement.textContent = this.quizState.currentQuestion.text;
+    }
+
+    if (questionNumberElement && this.quizState.currentQuestion) {
+      questionNumberElement.textContent = `Soru ${this.quizState.questionIndex + 1}`;
+    }
+
+    if (optionsElement && this.quizState.currentQuestion && this.quizState.currentQuestion.options) {
+      optionsElement.innerHTML = this.quizState.currentQuestion.options
+        .map((option: string, index: number) => `
+          <div class="option-item">
+            <span class="option-letter">${String.fromCharCode(65 + index)}</span>
+            <span class="option-text">${option}</span>
+          </div>
+        `).join('');
+    }
     
-    // Additional real-time updates
+    // Progress bar
+    const progressElement = document.getElementById('progress-bar');
+    if (progressElement) {
+      const progress = ((this.quizState.questionIndex + 1) / 10) * 100;
+      progressElement.style.width = `${progress}%`;
+    }
+    
+    // Status display
+    const statusElement = document.getElementById('quiz-status');
+    if (statusElement) {
+      statusElement.textContent = this.quizState.isActive ? 'Yarışma Devam Ediyor' : 'Beklemede';
+    }
+    
+    // Call additional updates
     this.updateScoreDisplay();
     this.updateQuestionDisplay();
     this.updateStatusIndicators();
@@ -1370,15 +1494,38 @@ export class QuizInterface {
    * Update timer display
    */
   private updateTimerDisplay(): void {
+    const startTime = localStorage.getItem('quizStartTime');
+    if (!startTime || !this.quizState.isActive) return;
+
+    const elapsed = Math.floor((Date.now() - parseInt(startTime)) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+
     const timerElement = document.getElementById('quiz-timer');
-    if (timerElement && this.quizState.isActive) {
-      const startTime = localStorage.getItem('quizStartTime');
-      if (startTime) {
-        const elapsed = Date.now() - parseInt(startTime);
-        const minutes = Math.floor(elapsed / 60000);
-        const seconds = Math.floor((elapsed % 60000) / 1000);
-        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    if (timerElement) {
+      timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    // Question time limit (30 seconds per question)
+    const questionStartTime = this.quizState.currentQuestionStartTime;
+    console.log('🕒 Timer update - questionStartTime:', questionStartTime, 'currentTime:', Date.now());
+
+    if (questionStartTime) {
+      const questionElapsed = Math.floor((Date.now() - questionStartTime) / 1000);
+      const remaining = Math.max(0, 30 - questionElapsed);
+
+      console.log('🕒 Timer update - elapsed:', questionElapsed, 'remaining:', remaining);
+
+      const questionTimerElement = document.getElementById('timer-display');
+      if (questionTimerElement) {
+        questionTimerElement.textContent = `${remaining}s`;
+        questionTimerElement.className = remaining <= 10 ? 'timer-warning' : 'timer-normal';
+        console.log('🕒 Timer display updated to:', `${remaining}s`);
+      } else {
+        console.warn('⚠️ timer-display element not found');
       }
+    } else {
+      console.log('🕒 No questionStartTime set, timer not running');
     }
   }
 

@@ -464,10 +464,11 @@ export const api = {
         args: { sessionQuestionId, vadThreshold, clientTimestamp }
       }),
 
-    submitAnswer: (sessionQuestionId: string, answer: string, confidence: number, clientTimestamp?: number) => 
+    submitAnswer: (sessionQuestionId: string, answer: string, confidence: number, clientTimestamp?: number, sessionId?: string) =>
       api.tools.dispatch({
         tool: 'submitAnswer',
-        args: { sessionQuestionId, answer, confidence, clientTimestamp }
+        args: { sessionQuestionId, answer, confidence, clientTimestamp },
+        sessionId
       }),
 
     finishQuiz: (sessionId: string) => 

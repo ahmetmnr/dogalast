@@ -72,6 +72,7 @@ export class SecureToolHandler {
   private privacyService: PrivacyService;
   private knowledgeService: KnowledgeService;
   private idempotencyCache = new Map<string, IdempotencyRecord>();
+  private lastTTSEndEvents = new Map<string, number>();
   private logger: Logger;
 
   constructor(db: DatabaseInstance, user: UserContext) {
@@ -280,10 +281,13 @@ export class SecureToolHandler {
       
       // Return existing session instead of throwing error
       const existingSession = existingSessionResult[0];
-      
+
+      // Load current question for existing session
+      const currentQuestion = await this.getNextQuestion(existingSession.id, existingSession.currentQuestionIndex);
+
       return {
         sessionId: existingSession?.id || '',
-        currentQuestion: null, // Will be loaded separately
+        currentQuestion: currentQuestion,
         totalScore: existingSession?.totalScore || 0,
         questionIndex: existingSession?.currentQuestionIndex || 0,
         questionsAnswered: existingSession?.questionsAnswered || 0
@@ -371,18 +375,69 @@ export class SecureToolHandler {
     sessionQuestionId: string;
     clientTimestamp?: number;
   }): Promise<any> {
+    const ttsEndedAt = args.clientTimestamp || Date.now();
+    
+    // Deduplication check
+    const lastEventTime = this.lastTTSEndEvents.get(args.sessionQuestionId);
+    if (lastEventTime && (ttsEndedAt - lastEventTime) < 1000) {
+      console.log('🔄 TTS end event deduplicated:', args.sessionQuestionId);
+      return { 
+        success: true, 
+        data: { 
+          deduplicated: true,
+          sessionQuestionId: args.sessionQuestionId,
+          timerStarted: false
+        } 
+      };
+    }
+    
+    // Store this event time
+    this.lastTTSEndEvents.set(args.sessionQuestionId, ttsEndedAt);
+    
+    // Cleanup old events periodically
+    this.cleanupOldTTSEvents();
+    
+    // Verify session question exists
+    const sessionQuestion = await this.db
+      .select()
+      .from(sessionQuestions)
+      .where(eq(sessionQuestions.id, args.sessionQuestionId))
+      .limit(1);
+
+    if (sessionQuestion.length === 0) {
+      throw new ToolExecutionError(
+        'Session question not found',
+        ErrorCode.QUESTION_NOT_FOUND,
+        404
+      );
+    }
+
+    // Record timing event
     const eventId = await this.timingService.markTTSEndEvent(
       args.sessionQuestionId,
-      args.clientTimestamp
+      ttsEndedAt
     );
 
     const timerStartTime = await this.timingService.calculateTimerStart(args.sessionQuestionId);
 
-    return {
+    console.log('✅ TTS end marked successfully:', {
+      sessionQuestionId: args.sessionQuestionId,
       eventId,
-      eventType: 'tts_end',
       timerStartTime,
-      serverTimestamp: Date.now(),
+      ttsEndedAt
+    });
+
+    return {
+      success: true,
+      data: {
+        eventId,
+        eventType: 'tts_end',
+        timerStartTime,
+        timerStarted: true,
+        sessionQuestionId: args.sessionQuestionId,
+        serverTimestamp: Date.now(),
+        ttsEndedAt
+      }
     };
   }
 
@@ -417,6 +472,13 @@ export class SecureToolHandler {
     confidence: number;
     clientTimestamp?: number;
   }): Promise<any> {
+    console.log('🏆 executeSubmitAnswer called with:', {
+      sessionQuestionId: args.sessionQuestionId,
+      answer: args.answer,
+      confidence: args.confidence,
+      clientTimestamp: args.clientTimestamp
+    });
+
     // Mark ASR received event
     const eventId = await this.timingService.markASRReceivedEvent(
       args.sessionQuestionId,
@@ -424,6 +486,7 @@ export class SecureToolHandler {
       args.confidence,
       args.clientTimestamp
     );
+    console.log('🏆 ASR event marked:', eventId);
 
     // Get question info
     const questionInfo = await this.getQuestionInfo(args.sessionQuestionId);
@@ -436,11 +499,24 @@ export class SecureToolHandler {
       );
     }
 
+    console.log('🏆 Question info retrieved:', {
+      correctAnswer: questionInfo.correctAnswer,
+      difficulty: questionInfo.difficulty,
+      timeLimit: questionInfo.timeLimit,
+      basePoints: questionInfo.points
+    });
+
     // Validate answer
     const validationResult = this.scoringService.validateAnswer(
       args.answer,
       questionInfo.correctAnswer
     );
+
+    console.log('🏆 Answer validation result:', {
+      isCorrect: validationResult.isCorrect,
+      matchType: validationResult.matchType,
+      similarity: validationResult.similarity
+    });
 
     // Calculate response time
     const responseTime = await this.timingService.calculateResponseTime(args.sessionQuestionId);
@@ -453,6 +529,8 @@ export class SecureToolHandler {
       );
     }
 
+    console.log('🏆 Response time calculated:', responseTime);
+
     // Calculate score
     const question = await this.getQuestionInfo(args.sessionQuestionId);
     const scoreResult = await this.scoringService.calculateScore(
@@ -462,6 +540,12 @@ export class SecureToolHandler {
       question ? question.timeLimit * 1000 : 30000,
       question ? parseInt(question.difficulty) : 1
     );
+
+    console.log('🏆 Score calculation result:', {
+      finalScore: scoreResult.finalScore,
+      basePoints: scoreResult.basePoints,
+      timeBonus: scoreResult.timeBonus
+    });
 
     // Update session question
     await this.db
@@ -476,6 +560,8 @@ export class SecureToolHandler {
       })
       .where(eq(sessionQuestions.id, args.sessionQuestionId));
 
+    console.log('🏆 Session question updated with points:', scoreResult.finalScore);
+
     // Update session total score
     await this.db
       .update(quizSessions)
@@ -485,10 +571,12 @@ export class SecureToolHandler {
       })
       .where(eq(quizSessions.id, (questionInfo as any).sessionId));
 
+    console.log('🏆 Session total score updated by adding:', scoreResult.finalScore);
+
     // Privacy compliance
     await this.privacyService.handleAudioPrivacy(args.sessionQuestionId);
 
-    return {
+    const result = {
       eventId,
       isCorrect: validationResult.isCorrect,
       matchType: validationResult.matchType,
@@ -503,6 +591,9 @@ export class SecureToolHandler {
       },
       correctAnswer: questionInfo.correctAnswer,
     };
+
+    console.log('🏆 executeSubmitAnswer returning result:', result);
+    return result;
   }
 
   /**
@@ -671,21 +762,50 @@ export class SecureToolHandler {
       );
     }
 
-    // Create session question
-    const sessionQuestionId = crypto.randomUUID();
+    // Check if session question already exists
+    const existingSessionQuestion = await this.db
+      .select()
+      .from(sessionQuestions)
+      .where(
+        and(
+          eq(sessionQuestions.sessionId, sessionId),
+          eq(sessionQuestions.orderInSession, questionIndex + 1)
+        )
+      )
+      .limit(1);
 
-    await this.db.insert(sessionQuestions).values({
-      id: sessionQuestionId,
-      sessionId,
-      questionId: question.id,
-      orderInSession: questionIndex + 1,
-    });
+    let sessionQuestionId: string;
+
+    if (existingSessionQuestion.length > 0) {
+      // Use existing session question
+      sessionQuestionId = existingSessionQuestion[0].id;
+    } else {
+      // Create new session question
+      sessionQuestionId = crypto.randomUUID();
+      await this.db.insert(sessionQuestions).values({
+        id: sessionQuestionId,
+        sessionId,
+        questionId: question.id,
+        orderInSession: questionIndex + 1,
+      });
+    }
+
+    // Safe JSON parsing for options
+    let options = null;
+    try {
+      if (question.options) {
+        options = typeof question.options === 'string' ? JSON.parse(question.options) : question.options;
+      }
+    } catch (error) {
+      console.error('Error parsing question options:', error);
+      options = null;
+    }
 
     return {
       sessionQuestionId,
       questionId: question.id,
       text: question.text,
-      options: question.options ? JSON.parse(question.options) : null,
+      options: options,
       difficulty: question.difficulty,
       timeLimit: question.timeLimit,
       basePoints: question.basePoints,
@@ -749,6 +869,24 @@ export class SecureToolHandler {
   }
 
   /**
+   * Cleanup old TTS end events to prevent memory leaks
+   */
+  private cleanupOldTTSEvents(): void {
+    const now = Date.now();
+    for (const [key, time] of this.lastTTSEndEvents.entries()) {
+      if (now - time > 300000) { // 5 minutes
+        this.lastTTSEndEvents.delete(key);
+      }
+    }
+    
+    // Log cleanup if events were removed
+    const remainingEvents = this.lastTTSEndEvents.size;
+    if (remainingEvents > 0) {
+      console.log(`🧹 TTS events cleanup: ${remainingEvents} active events remaining`);
+    }
+  }
+
+  /**
    * Get question info from session question ID
    */
   private async getQuestionInfo(sessionQuestionId: string): Promise<{
@@ -786,8 +924,8 @@ export class SecureToolHandler {
     
     return {
       id: parseInt((questionData as any).questions.id),
-      title: (questionData as any).questions.content.split('\n')[0] || 'Question',
-      content: (questionData as any).questions.content,
+      title: (questionData as any).questions.text || 'Question',
+      content: (questionData as any).questions.text,
       correctAnswer: (questionData as any).questions.correctAnswer,
       category: (questionData as any).questions.category,
       difficulty: (questionData as any).questions.difficulty.toString(),

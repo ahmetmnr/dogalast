@@ -28,6 +28,10 @@ import type { ContextVariables } from '@/types/api'
 
 const appLogger = createLogger('app')
 
+// Global OpenAI connection tracking to prevent duplicates
+const activeOpenAIConnections = new Map<string, WebSocket>();
+const activeSessionConnections = new Map<string, string>(); // sessionId -> userId
+
 // Create Hono app with proper typing
 const app = new Hono<{ Variables: ContextVariables }>()
 
@@ -333,6 +337,31 @@ export default {
       const userId = ws.data?.userId || 'unknown';
       appLogger.info(`[websocket] Connection opened for user ${userId}`);
       
+      // Check if OpenAI connection already exists for this user
+      if (ws.openaiConnection) {
+        appLogger.info(`[websocket] OpenAI connection already exists for user ${userId}, reusing`);
+        return;
+      }
+      
+      // Check global connection map
+      const existingConnection = activeOpenAIConnections.get(userId);
+      if (existingConnection && existingConnection.readyState === WebSocket.OPEN) {
+        appLogger.info(`[websocket] Reusing existing OpenAI connection for user ${userId}`);
+        ws.openaiConnection = existingConnection;
+        return;
+      }
+      
+      // Prevent multiple connections for same session
+      const sessionId = ws.data?.sessionId;
+      if (sessionId) {
+        const existingUserId = activeSessionConnections.get(sessionId);
+        if (existingUserId && existingUserId !== userId) {
+          appLogger.warn(`[websocket] Session ${sessionId} already has connection for user ${existingUserId}`);
+          return;
+        }
+        activeSessionConnections.set(sessionId, userId);
+      }
+      
       // Create OpenAI Realtime connection for this user
       try {
         // Debug API key
@@ -371,6 +400,8 @@ export default {
         // Now connect with ephemeral token (no headers in WebSocket constructor)
         const openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2025-06-03`);
         
+        // Store in global map to prevent duplicates
+        activeOpenAIConnections.set(userId, openaiWs);
         ws.openaiConnection = openaiWs;
         
         openaiWs.onopen = () => {
@@ -529,6 +560,9 @@ KURALLAR:
         
         openaiWs.onclose = () => {
           appLogger.info(`[websocket] OpenAI connection closed for user ${userId}`);
+          // Remove from global map
+          activeOpenAIConnections.delete(userId);
+          ws.openaiConnection = null;
         };
         
       } catch (error) {
@@ -545,7 +579,15 @@ KURALLAR:
       }));
     },
     close(ws: any, code: number, reason: string) {
-      appLogger.info(`[websocket] Connection closed for ${ws.data?.userId}:`, code, reason);
+      const userId = ws.data?.userId || 'unknown';
+      appLogger.info(`[websocket] Connection closed for ${userId}:`, code, reason);
+      
+      // Cleanup OpenAI connection
+      if (ws.openaiConnection) {
+        ws.openaiConnection.close();
+        activeOpenAIConnections.delete(userId);
+        ws.openaiConnection = null;
+      }
     },
     error(ws: any, error: Error) {
       appLogger.error(`[websocket] Error for ${ws.data?.userId}:`, error);

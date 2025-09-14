@@ -63,6 +63,13 @@ export class ScoringService {
     const normalizedUser = this.normalizeAnswer(userAnswer);
     const normalizedCorrect = this.normalizeAnswer(correctAnswer);
 
+    console.log('🏆 ScoringService validateAnswer:', {
+      userAnswer,
+      correctAnswer,
+      normalizedUser,
+      normalizedCorrect
+    });
+
     // Exact match
     if (normalizedUser === normalizedCorrect) {
       return {
@@ -76,7 +83,7 @@ export class ScoringService {
 
     // Fuzzy matching with Levenshtein distance
     const similarity = this.calculateSimilarity(normalizedUser, normalizedCorrect);
-    
+
     if (similarity >= 0.85) {
       return {
         isCorrect: true,
@@ -331,15 +338,28 @@ export class ScoringService {
     difficulty: number = 1
   ): Promise<ScoreCalculationResult> {
     try {
+      console.log('🏆 ScoringService calculateScore called with:', {
+        sessionQuestionId,
+        validationResult,
+        responseTime,
+        timeLimitMs,
+        difficulty
+      });
+
       // Get question info
       const questionInfo = await this.getQuestionInfo(sessionQuestionId);
       if (!questionInfo) {
         throw new Error('Question info not found');
       }
 
+      console.log('🏆 Question info for scoring:', {
+        basePoints: questionInfo.questions.basePoints,
+        questionId: questionInfo.questions.id
+      });
+
       // Base points calculation
       let basePoints = questionInfo.questions.basePoints;
-      
+
       // Apply match type multiplier
       switch (validationResult.matchType) {
         case 'exact':
@@ -356,20 +376,41 @@ export class ScoringService {
           break;
       }
 
+      console.log('🏆 Base points after match type multiplier:', {
+        originalBasePoints: questionInfo.questions.basePoints,
+        matchType: validationResult.matchType,
+        adjustedBasePoints: basePoints
+      });
+
       // Time bonus calculation
       const timeBonus = this.calculateTimeBonus(basePoints, responseTime, timeLimitMs);
-      
-      // Streak multiplier
-      const currentStreak = await this.getCurrentStreak(sessionQuestionId);
+      console.log('🏆 Time bonus calculated:', timeBonus);
+
+      // Get session ID from sessionQuestionId to get streak
+      const sessionId = questionInfo.session_questions.sessionId;
+      const currentStreak = await this.getCurrentStreak(sessionId);
       const streakMultiplier = this.calculateStreakMultiplier(currentStreak);
-      
+
+      console.log('🏆 Streak info:', {
+        sessionId,
+        currentStreak,
+        streakMultiplier
+      });
+
       // Difficulty multiplier
       const difficultyMultiplier = this.calculateDifficultyMultiplier(difficulty);
-      
+      console.log('🏆 Difficulty multiplier:', difficultyMultiplier);
+
       // Final calculation
       const baseWithTimeBonus = basePoints + timeBonus;
       const withStreak = Math.floor(baseWithTimeBonus * streakMultiplier);
       const finalScore = Math.floor(withStreak * difficultyMultiplier);
+
+      console.log('🏆 Final score calculation:', {
+        baseWithTimeBonus,
+        withStreak,
+        finalScore
+      });
 
       const breakdown = {
         basePts: basePoints,
@@ -397,6 +438,7 @@ export class ScoringService {
         breakdown
       };
     } catch (error) {
+      console.log('🏆 ScoringService calculateScore error:', error);
       logger.error('Score calculation failed', error as Error);
       throw error;
     }

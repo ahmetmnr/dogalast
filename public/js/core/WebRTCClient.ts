@@ -22,31 +22,57 @@ export class WebRTCClient {
     try {
       console.log('🔌 Starting WebRTC connection...');
       
-      // Get ephemeral token from backend (correct endpoint)
-      const tokenResponse = await fetch('http://localhost:8787/api/quiz/realtime/ephemeral-token?sessionId=' + Date.now(), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('zero_waste_auth_token')}`,
-          'Content-Type': 'application/json'
+      // Prevent multiple simultaneous connections
+      if (this.pc && this.pc.connectionState !== 'closed') {
+        console.log('⚠️ Connection already exists, closing first');
+        this.disconnect();
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      // Get ephemeral token with retry logic
+      let tokenResponse;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          tokenResponse = await fetch(`http://localhost:8787/api/quiz/realtime/ephemeral-token?sessionId=${Date.now()}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('zero_waste_auth_token')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (tokenResponse.ok) break;
+          
+        } catch (error) {
+          console.warn(`Token request attempt ${retryCount + 1} failed:`, error);
         }
-      });
+        
+        retryCount++;
+        if (retryCount < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        }
+      }
 
-      if (!tokenResponse.ok) {
-        throw new Error('Failed to get ephemeral token');
+      if (!tokenResponse || !tokenResponse.ok) {
+        throw new Error('Failed to get ephemeral token after retries');
       }
 
       const tokenData = await tokenResponse.json() as any;
       this.ephemeralToken = tokenData.data.token;
 
-      console.log('✅ Got ephemeral key:', this.ephemeralToken?.substring(0, 10) + '...');
+      console.log('✅ Got ephemeral token');
       
-      // RTCPeerConnection oluştur
+      // Create RTCPeerConnection with stable configuration
       this.pc = new RTCPeerConnection({
         iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
+          { urls: 'stun:stun.l.google.com:19302' }
         ],
-        iceCandidatePoolSize: 10
+        iceCandidatePoolSize: 0,
+        bundlePolicy: 'balanced',
+        rtcpMuxPolicy: 'require'
       });
 
       // Data channel oluştur
@@ -73,11 +99,24 @@ export class WebRTCClient {
         }
       };
 
-      // Connection state monitoring
+      // Connection state monitoring with stability checks
       this.pc.onconnectionstatechange = () => {
         const state = this.pc?.connectionState || 'disconnected';
         console.log('🔗 Connection state:', state);
-        this.config.onConnectionStateChange?.(state);
+        
+        if (state === 'connected') {
+          console.log('✅ WebRTC connection stable');
+          this.config.onConnectionStateChange?.(state);
+        } else if (state === 'failed' || state === 'disconnected') {
+          console.log('❌ Connection failed, will retry');
+          setTimeout(() => {
+            if (this.pc?.connectionState === 'failed') {
+              this.handleConnectionFailure();
+            }
+          }, 2000);
+        } else {
+          this.config.onConnectionStateChange?.(state);
+        }
       };
 
       // Remote track handling for audio
@@ -102,10 +141,8 @@ export class WebRTCClient {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000,
-          channelCount: 1
-        }
+          sampleRate: 24000,
+        },
       });
 
       stream.getTracks().forEach(track => {
@@ -140,9 +177,26 @@ export class WebRTCClient {
       console.log('✅ WebRTC connection established');
 
     } catch (error) {
-      console.error('Connection error:', error);
+      console.error('WebRTC start error:', error);
       this.config.onError?.(error instanceof Error ? error : new Error('Unknown error'));
     }
+  }
+
+  /**
+   * Handle connection failure with retry logic
+   */
+  private handleConnectionFailure(): void {
+    console.log('🔄 Handling connection failure...');
+    this.disconnect();
+    
+    // Retry after delay
+    setTimeout(() => {
+      console.log('🔄 Retrying WebRTC connection...');
+      this.start().catch(error => {
+        console.error('Retry failed:', error);
+        this.config.onError?.(error);
+      });
+    }, 5000);
   }
 
   sendEvent(event: any): void {

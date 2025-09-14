@@ -283,8 +283,8 @@
         function renderLeaderboard(entries) {
             const container = document.getElementById('leaderboard-list');
             if (!container) return;
-            
-            if (entries.length === 0) {
+
+            if (!entries || entries.length === 0) {
                 container.innerHTML = '<p class="text-center text-secondary">Henüz yarışma sonucu yok</p>';
                 return;
             }

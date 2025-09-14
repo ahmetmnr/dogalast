@@ -181,12 +181,12 @@ export const questionTimings = sqliteTable('question_timings', {
     sessionQuestionIdx: index('idx_question_timings_session_question').on(table.sessionQuestionId),
     eventTypeIdx: index('idx_question_timings_event_type').on(table.eventType),
     serverTimestampIdx: index('idx_question_timings_server_timestamp').on(table.serverTimestamp),
-    // Partial index for active queries (last 24 hours)
-    activeIdx: index('idx_question_timings_active').on(
+    // Standard composite index for performance (removed partial index due to SQLite unixepoch() limitation)
+    coveringIdx: index('idx_question_timings_covering').on(
       table.sessionQuestionId,
       table.eventType,
       table.serverTimestamp
-    ).where(sql`server_timestamp > (unixepoch() - 86400)`),
+    ),
   };
 });
 

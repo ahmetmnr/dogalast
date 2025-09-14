@@ -133,3 +133,4 @@ pnpm-debug.log*
 *.pid
 *.seed
 *.pid.lock
+.claude/settings.local.json

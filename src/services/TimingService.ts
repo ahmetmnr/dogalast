@@ -83,11 +83,15 @@ export class TimingService {
         ? this.calculateNetworkLatency(serverTimestamp, event.clientSignalTimestamp)
         : undefined;
 
-      // Temporarily disable timing events to avoid unixepoch() error
-      // TODO: Fix database schema for timing events
-      Logger.info('Timing event skipped (schema issue)', {
+      // Insert timing event into database
+      await this.db.insert(questionTimings).values({
+        id: eventId,
+        sessionQuestionId: event.sessionQuestionId,
         eventType: event.eventType,
-        sessionQuestionId: event.sessionQuestionId
+        serverTimestamp: serverTimestamp,
+        clientSignalTimestamp: event.clientSignalTimestamp,
+        networkLatency,
+        metadata: event.metadata ? JSON.stringify(event.metadata) : null,
       });
 
       await this.auditTimingEvent(eventId, event, serverTimestamp, networkLatency);
@@ -106,6 +110,23 @@ export class TimingService {
 
       return eventId;
     } catch (error) {
+      const errorMessage = (error as Error).message;
+
+      // Handle duplicate timing events gracefully
+      if (errorMessage.includes('UNIQUE constraint failed') &&
+          errorMessage.includes('question_timings.session_question_id') &&
+          errorMessage.includes('question_timings.event_type')) {
+
+        Logger.info('Timing event already exists, skipping duplicate', {
+          eventType: event.eventType,
+          sessionQuestionId: event.sessionQuestionId,
+        });
+
+        // Return the existing event ID (we'll use a consistent format)
+        return `${event.sessionQuestionId}_${event.eventType}_existing`;
+      }
+
+      // Log other errors as before
       Logger.error('Failed to record timing event', error as Error, {
         eventType: event.eventType,
         sessionQuestionId: event.sessionQuestionId,
@@ -229,14 +250,33 @@ export class TimingService {
         )
         .orderBy(questionTimings.serverTimestamp);
 
+      Logger.info('Calculate response time - events found', {
+        sessionQuestionId,
+        eventsCount: events.length,
+        events: events.map(e => ({ eventType: e.eventType, serverTimestamp: e.serverTimestamp }))
+      });
+
       const ttsEnd = events.find(e => e.eventType === 'tts_end');
       const answerReceived = events.find(e => e.eventType === 'answer_received');
 
       if (!ttsEnd || !answerReceived) {
+        Logger.warn('Missing timing events for response time calculation', {
+          sessionQuestionId,
+          hasTtsEnd: !!ttsEnd,
+          hasAnswerReceived: !!answerReceived
+        });
         return null;
       }
 
-      return answerReceived.serverTimestamp - ttsEnd.serverTimestamp;
+      const responseTime = answerReceived.serverTimestamp - ttsEnd.serverTimestamp;
+      Logger.info('Response time calculated', {
+        sessionQuestionId,
+        responseTime,
+        ttsEndTime: ttsEnd.serverTimestamp,
+        answerReceivedTime: answerReceived.serverTimestamp
+      });
+
+      return responseTime;
     } catch (error) {
       Logger.error('Failed to calculate response time', error as Error);
       return null;
